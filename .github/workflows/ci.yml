@@ -13,11 +13,92 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.decide.outputs.version }}
+      should_push: ${{ steps.decide.outputs.should_push }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history: "Decide" below diffs against an arbitrary past commit.
+          fetch-depth: 0
+
+      # Uptrace publishes betas/rcs as regular (non-flagged) GitHub releases,
+      # so "latest release" isn't reliable. Only consider clean X.Y.Z tags
+      # from the Docker Hub image we actually pin in the Dockerfile.
+      - name: Determine latest stable Uptrace version
+        id: uptrace
+        run: |
+          url="https://hub.docker.com/v2/repositories/uptrace/uptrace/tags?page_size=100"
+          tags=""
+          while [ -n "$url" ] && [ "$url" != "null" ]; do
+            page=$(curl -fsSL "$url")
+            tags="$tags $(echo "$page" | jq -r '.results[].name')"
+            url=$(echo "$page" | jq -r '.next')
+          done
+          version=$(echo "$tags" | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+          if [ -z "$version" ]; then
+            echo "Could not determine the latest stable Uptrace version" >&2
+            exit 1
+          fi
+          echo "Latest stable Uptrace version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Skip publishing only when both the resolved Uptrace version and
+      # the tracked source files are unchanged since whatever we last published as ":latest".
+      - name: Decide whether to publish
+        id: decide
+        run: |
+          set -e
+          image=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          uptrace_version="${{ steps.uptrace.outputs.version }}"
+
+          last_labels=$(docker buildx imagetools inspect "${image}:latest" --format '{{json .Image.Config.Labels}}' 2>/dev/null || true)
+
+          if [ -z "$last_labels" ] || [ "$last_labels" = "null" ]; then
+            echo "No image published yet."
+            revision=0
+            should_push=true
+          else
+            last_uptrace=$(echo "$last_labels" | jq -r '."io.onetrace.uptrace.version" // empty')
+            last_version=$(echo "$last_labels" | jq -r '."org.opencontainers.image.version" // empty')
+            last_sha=$(echo "$last_labels" | jq -r '."org.opencontainers.image.revision" // empty')
+            last_revision="${last_version##*-}"
+
+            if [ "$last_uptrace" != "$uptrace_version" ]; then
+              echo "Uptrace version changed: $last_uptrace -> $uptrace_version"
+              revision=0
+              should_push=true
+            elif [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yml 2>/dev/null; then
+              echo "Uptrace version unchanged ($uptrace_version) and no relevant file changed since $last_sha."
+              revision="$last_revision"
+              should_push=false
+            else
+              echo "Relevant files changed since $last_sha (or it couldn't be compared)."
+              revision=$((last_revision + 1))
+              should_push=true
+            fi
+          fi
+
+          version="${uptrace_version}-${revision}"
+          echo "Version: $version, should_push: $should_push"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "should_push=$should_push" >> "$GITHUB_OUTPUT"
 
       - name: Build image
-        run: docker build -t onetrace:ci .
+        run: |
+          docker build \
+            --build-arg UPTRACE_VERSION=${{ steps.uptrace.outputs.version }} \
+            --build-arg VERSION=${{ steps.decide.outputs.version }} \
+            --build-arg VCS_REF=${{ github.sha }} \
+            --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            -t onetrace:ci .
 
       - name: Save image to a tarball
         run: docker save onetrace:ci -o onetrace.tar
@@ -95,8 +176,11 @@ jobs:
         run: docker logs onetrace || true
 
   push:
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [build, test]
+    if: >
+      needs.build.outputs.should_push == 'true' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
@@ -116,7 +200,7 @@ jobs:
       - name: Tag and push
         run: |
           image=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          docker tag onetrace:ci "$image:${{ github.sha }}"
-          docker tag onetrace:ci "$image:latest"
-          docker push "$image:${{ github.sha }}"
-          docker push "$image:latest"
+          for tag in "${{ needs.build.outputs.version }}" latest "${{ github.sha }}"; do
+            docker tag onetrace:ci "${image}:${tag}"
+            docker push "${image}:${tag}"
+          done

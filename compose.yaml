@@ -2,7 +2,13 @@
 
 services:
   onetrace:
-    build: .
+    build:
+      context: .
+      args:
+        VERSION: dev
+        VCS_REF: ""
+        BUILD_DATE: ""
+        UPTRACE_VERSION: 2.0.3
     ports:
       - "8080:14318" # Uptrace UI + OTLP/HTTP → http://localhost:8080
       - "8081:4317"  # OTLP/gRPC

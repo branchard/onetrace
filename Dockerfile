@@ -15,6 +15,11 @@ FROM postgres:${POSTGRES_VERSION} AS postgres
 FROM redis:${REDIS_VERSION} AS redis
 
 FROM alpine:latest
+ARG UPTRACE_VERSION
+ARG CLICKHOUSE_VERSION
+ARG POSTGRES_VERSION
+ARG REDIS_VERSION
+
 # -- Declare variables --
 ENV CLICKHOUSE_DB=uptrace CLICKHOUSE_USER=uptrace CLICKHOUSE_PASSWORD=uptrace
 ENV POSTGRES_DB=uptrace POSTGRES_USER=uptrace POSTGRES_PASSWORD=uptrace
@@ -92,3 +97,25 @@ COPY entrypoint.sh /entrypoint.sh
 COPY uptrace.yml /etc/uptrace/uptrace.yml
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
+
+# -- Labels --
+# Placed last on purpose: VERSION/VCS_REF/BUILD_DATE change on every commit,
+# and an ARG's value invalidates the build cache for every instruction after
+# its declaration in a stage — even ones that don't reference it. Declaring
+# them (and LABEL, which adds no filesystem layer) at the very end keeps the
+# actual content-producing steps above reproducible/cacheable across builds
+# that only differ by these three values. Default to "dev"/empty for a plain
+# local `docker build .`; CI supplies real values (see .github/workflows/ci.yml).
+ARG VERSION=dev
+ARG VCS_REF
+ARG BUILD_DATE
+LABEL org.opencontainers.image.title="onetrace" \
+      org.opencontainers.image.description="Uptrace, ClickHouse, PostgreSQL and Redis bundled in a single Docker image" \
+      org.opencontainers.image.source="https://github.com/branchard/onetrace" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      io.onetrace.uptrace.version="${UPTRACE_VERSION}" \
+      io.onetrace.clickhouse.version="${CLICKHOUSE_VERSION}" \
+      io.onetrace.postgres.version="${POSTGRES_VERSION}" \
+      io.onetrace.redis.version="${REDIS_VERSION}"
