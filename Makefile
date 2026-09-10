@@ -9,6 +9,7 @@ help: ## Show this help
 
 start: ## Start containers with Docker Compose
 	docker compose up -d --build
+	@echo "Open http://localhost:8080 in your browser (email: admin@uptrace.local, password: admin)"
 
 stop: ## Stop and delete all containers
 	docker compose down
