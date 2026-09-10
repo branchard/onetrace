@@ -77,7 +77,7 @@ jobs:
               echo "Uptrace version changed: $last_uptrace -> $uptrace_version"
               revision=0
               should_push=true
-            elif [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yml 2>/dev/null; then
+            elif [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yaml 2>/dev/null; then
               echo "Uptrace version unchanged ($uptrace_version) and no relevant file changed since $last_sha."
               revision="$last_revision"
               should_push=false
@@ -164,8 +164,8 @@ jobs:
       - name: Internal services (Postgres/ClickHouse/Redis) are healthy
         run: |
           docker exec onetrace /usr/local/bin/redis-cli ping
-          docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yml pg ping
-          docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yml ch ping
+          docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yaml pg ping
+          docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yaml ch ping
 
       - name: Container shuts down cleanly
         run: |

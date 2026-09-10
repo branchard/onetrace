@@ -1,6 +1,6 @@
 # Onetrace
 
-[![ci](https://github.com/branchard/onetrace/actions/workflows/ci.yml/badge.svg)](https://github.com/branchard/onetrace/actions/workflows/ci.yaml)
+[![ci](https://github.com/branchard/onetrace/actions/workflows/ci.yaml/badge.svg)](https://github.com/branchard/onetrace/actions/workflows/ci.yaml)
 
 [Uptrace](https://github.com/uptrace/uptrace) — with ClickHouse, PostgreSQL and Redis — packaged as a **single Docker image** for simple, self-contained deployments.
 
