@@ -74,10 +74,10 @@ volumes:
 
 ### Ports
 
-| Host | Container | Purpose |
-|---|---|---|
-| 8080 | 14318 | Web UI + OTLP/HTTP receiver |
-| 8081 | 4317 | OTLP/gRPC receiver |
+| Port | Purpose |
+|---|---|
+| 14318 | Web UI + OTLP/HTTP receiver |
+| 4317 | OTLP/gRPC receiver |
 
 ### Environment variables
 
