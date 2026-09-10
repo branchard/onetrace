@@ -1,6 +1,6 @@
 # -- Versions --
 # See: https://github.com/uptrace/uptrace/blob/v2.0.3/cmd/uptrace/Dockerfile
-ARG UPTRACE_VERSION=2.0.3
+ARG UPTRACE_VERSION
 # See: https://github.com/ClickHouse/docker-library/blob/e0d01891a279d0c8c03d92255aa24734729e1edf/server/26.3.29.7/Dockerfile.alpine
 ARG CLICKHOUSE_VERSION=26.3-alpine
 # See: https://github.com/docker-library/postgres/blob/e00e1bd34ec5c8a8e7ad89b273b3d42efaf6d5bc/18/alpine3.24/Dockerfile
@@ -104,9 +104,8 @@ ENTRYPOINT ["/entrypoint.sh"]
 # its declaration in a stage — even ones that don't reference it. Declaring
 # them (and LABEL, which adds no filesystem layer) at the very end keeps the
 # actual content-producing steps above reproducible/cacheable across builds
-# that only differ by these three values. Default to "dev"/empty for a plain
-# local `docker build .`; CI supplies real values (see .github/workflows/ci.yml).
-ARG VERSION=dev
+# that only differ by these three values.
+ARG VERSION
 ARG VCS_REF
 ARG BUILD_DATE
 LABEL org.opencontainers.image.title="onetrace" \
