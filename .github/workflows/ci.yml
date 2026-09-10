@@ -40,7 +40,17 @@ jobs:
         run: docker load -i onetrace.tar
 
       - name: Start container
-        run: docker run -d --name onetrace -p 8080:14318 -p 8081:4317 onetrace:ci
+        run: |
+          docker run -d --name onetrace -p 8080:14318 -p 8081:4317 \
+          -e SECRET=change-me-in-production \
+          -e SITE_URL=http://localhost:8080 \
+          -e ADMIN_EMAIL=admin@uptrace.local \
+          -e ADMIN_PASSWORD=admin \
+          -e ADMIN_TOKEN=change-me-in-production \
+          -e ORG_NAME=MyOrg \
+          -e PROJECT_NAME=MyProject \
+          -e PROJECT_TOKEN=change-me-in-production \
+          onetrace:ci
 
       - name: Wait for the UI to come up
         run: |
