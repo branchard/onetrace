@@ -200,7 +200,12 @@ jobs:
       - name: Tag and push
         run: |
           image=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          for tag in "${{ needs.build.outputs.version }}" latest "${{ github.sha }}"; do
+          version="${{ needs.build.outputs.version }}"
+          uptrace_version="${version%-*}"   # 2.0.3-1 -> 2.0.3
+          minor="${uptrace_version%.*}"     # 2.0.3   -> 2.0
+          major="${minor%.*}"               # 2.0     -> 2
+
+          for tag in "$version" "$uptrace_version" "$minor" "$major" latest; do
             docker tag onetrace:ci "${image}:${tag}"
             docker push "${image}:${tag}"
           done
