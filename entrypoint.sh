@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeo pipefail
 
-UPTRACE="/uptrace --config=/etc/uptrace/uptrace.yml"
+UPTRACE="/uptrace --config=/etc/uptrace/uptrace.yaml"
 uptrace_pid=""
 
 terminate() {

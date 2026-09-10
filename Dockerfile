@@ -94,7 +94,7 @@ WORKDIR /data
 # Orchestration: start ClickHouse, PostgreSQL and Redis, wait for them to be
 # ready, then run uptrace in the foreground. See entrypoint.sh.
 COPY entrypoint.sh /entrypoint.sh
-COPY uptrace.yml /etc/uptrace/uptrace.yml
+COPY uptrace.yaml /etc/uptrace/uptrace.yaml
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 

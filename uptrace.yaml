@@ -5,7 +5,7 @@
 ## localhost. Postgres/ClickHouse/Redis are not exposed outside the container,
 ## so these default credentials are for internal use only.
 ##
-## To customize, mount your own file over /etc/uptrace/uptrace.yml (and set the
+## To customize, mount your own file over /etc/uptrace/uptrace.yaml (and set the
 ## matching POSTGRES_*/CLICKHOUSE_* environment variables so the two agree).
 ## Generated with `uptrace config create`; see https://uptrace.dev/get/hosted/config.
 ##

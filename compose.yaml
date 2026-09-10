@@ -35,7 +35,7 @@ services:
   # Sends a continuous stream of synthetic logs, so there's something to look
   # at in the UI right after startup. Uses the official OpenTelemetry load
   # generator (no custom image needed). The DSN below is project "Project1"
-  # / token "project1_secret" from the default uptrace.yml — update it if you
+  # / token "project1_secret" from the default uptrace.yaml — update it if you
   # mount your own config.
   demo-logs:
     image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest

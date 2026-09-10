@@ -92,7 +92,7 @@ volumes:
 | `PROJECT_NAME` | ✅ | — | Bootstrap project name |
 | `SITE_URL` | | `http://localhost:14318` | Public URL of the UI |
 
-PostgreSQL/ClickHouse credentials (`POSTGRES_*` / `CLICKHOUSE_*` env vars, all default to `uptrace`) are internal to the container and hardcoded as such in the `uptrace.yml`.
+PostgreSQL/ClickHouse credentials (`POSTGRES_*` / `CLICKHOUSE_*` env vars, all default to `uptrace`) are internal to the container and hardcoded as such in the `uptrace.yaml`.
 
 Data is persisted through three volumes: `/var/lib/clickhouse`, `/var/lib/postgresql`, `/data` (Redis).
 
