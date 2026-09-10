@@ -7,18 +7,14 @@ services:
       - "8080:14318" # Uptrace UI + OTLP/HTTP → http://localhost:8080
       - "8081:4317"  # OTLP/gRPC
     environment:
-      # Safe to override standalone: uptrace.yml reads them via ${VAR:default}.
-      UPTRACE_SITE_URL: http://localhost:8080
-      UPTRACE_SECRET: change-me-in-production
-      # Internal-only credentials for the bundled Postgres/ClickHouse (never
-      # exposed outside the container). If you change these, also mount a
-      # matching uptrace.yml (see below) so uptrace can still connect.
-      POSTGRES_USER: uptrace
-      POSTGRES_PASSWORD: uptrace
-      POSTGRES_DB: uptrace
-      CLICKHOUSE_USER: uptrace
-      CLICKHOUSE_PASSWORD: uptrace
-      CLICKHOUSE_DB: uptrace
+      SECRET: change-me-in-production
+      SITE_URL: http://localhost:8080
+      ADMIN_EMAIL: admin@uptrace.local
+      ADMIN_PASSWORD: admin
+      ADMIN_TOKEN: change-me-in-production
+      ORG_NAME: MyOrg
+      PROJECT_NAME: MyProject
+      PROJECT_TOKEN: change-me-in-production
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - postgres-data:/var/lib/postgresql

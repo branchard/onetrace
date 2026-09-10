@@ -10,6 +10,10 @@ FROM redis:8-alpine AS redis
 
 FROM alpine:latest
 
+# -- Declare variables --
+ENV CLICKHOUSE_DB=uptrace CLICKHOUSE_USER=uptrace CLICKHOUSE_PASSWORD=uptrace
+ENV POSTGRES_DB=uptrace POSTGRES_USER=uptrace POSTGRES_PASSWORD=uptrace
+
 # -- Dependencies --
 RUN apk --update add --no-cache ca-certificates bash tzdata
 
@@ -41,7 +45,6 @@ RUN cp /usr/share/zoneinfo/UTC /etc/localtime \
     && chown root:clickhouse /var/log/clickhouse-server \
     && chmod ugo+Xrw -R /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-client /etc/clickhouse-server
 VOLUME /var/lib/clickhouse
-ENV CLICKHOUSE_DB=uptrace CLICKHOUSE_USER=uptrace CLICKHOUSE_PASSWORD=uptrace
 
 # -- PostgreSQL --
 # Built for musl/Alpine already, so no glibc-compat dance is needed here: copy
@@ -63,7 +66,7 @@ RUN mv /usr/local/bin/docker-entrypoint.sh /usr/local/bin/postgres-entrypoint.sh
     && adduser -u 70 -S -D -G postgres -H -h /var/lib/postgresql -s /bin/sh postgres \
     && install -d -o postgres -g postgres -m 1777 /var/lib/postgresql \
     && install -d -o postgres -g postgres -m 3777 /var/run/postgresql
-ENV PGDATA=/var/lib/postgresql/18/docker POSTGRES_USER=uptrace POSTGRES_PASSWORD=uptrace POSTGRES_DB=uptrace
+ENV PGDATA=/var/lib/postgresql/18/docker
 VOLUME /var/lib/postgresql
 
 # -- Redis --
