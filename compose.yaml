@@ -1,0 +1,73 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
+
+services:
+  onetrace:
+    build: .
+    ports:
+      - "8080:14318" # Uptrace UI + OTLP/HTTP → http://localhost:8080
+      - "8081:4317"  # OTLP/gRPC
+    environment:
+      # Safe to override standalone: uptrace.yml reads them via ${VAR:default}.
+      UPTRACE_SITE_URL: http://localhost:8080
+      UPTRACE_SECRET: change-me-in-production
+      # Internal-only credentials for the bundled Postgres/ClickHouse (never
+      # exposed outside the container). If you change these, also mount a
+      # matching uptrace.yml (see below) so uptrace can still connect.
+      POSTGRES_USER: uptrace
+      POSTGRES_PASSWORD: uptrace
+      POSTGRES_DB: uptrace
+      CLICKHOUSE_USER: uptrace
+      CLICKHOUSE_PASSWORD: uptrace
+      CLICKHOUSE_DB: uptrace
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - postgres-data:/var/lib/postgresql
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:14318/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # Sends a continuous stream of synthetic logs, so there's something to look
+  # at in the UI right after startup. Uses the official OpenTelemetry load
+  # generator (no custom image needed). The DSN below is project "Project1"
+  # / token "project1_secret" from the default uptrace.yml — update it if you
+  # mount your own config.
+  demo-logs:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest
+    depends_on:
+      onetrace:
+        condition: service_healthy
+    command:
+      - logs
+      - --duration=inf
+      - --rate=2
+      - --service=demo
+      - --otlp-endpoint=onetrace:4317
+      - --otlp-insecure
+      - --otlp-header=uptrace-dsn="http://project1_secret@onetrace:4317/1"
+
+  # Same idea, but for metrics. telemetrygen only generates one signal type
+  # per process, hence the separate service (add a third one for traces the
+  # same way if you want those too).
+  demo-metrics:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest
+    depends_on:
+      onetrace:
+        condition: service_healthy
+    command:
+      - metrics
+      - --duration=inf
+      - --rate=1
+      - --metric-type=Gauge
+      - --service=demo
+      - --otlp-endpoint=onetrace:4317
+      - --otlp-insecure
+      - --otlp-header=uptrace-dsn="http://project1_secret@onetrace:4317/1"
+
+volumes:
+  clickhouse-data:
+  postgres-data:
+  redis-data:
