@@ -1,15 +1,20 @@
-# -- Declare images --
-FROM uptrace/uptrace:latest AS uptrace
-# See: https://github.com/uptrace/uptrace/blob/f617f6c76a035a1b2a83cc19cb2bc2802a68f0a6/cmd/uptrace/Dockerfile
-FROM clickhouse/clickhouse-server:26.3-alpine AS clickhouse
+# -- Versions --
+# See: https://github.com/uptrace/uptrace/blob/v2.0.3/cmd/uptrace/Dockerfile
+ARG UPTRACE_VERSION=2.0.3
 # See: https://github.com/ClickHouse/docker-library/blob/e0d01891a279d0c8c03d92255aa24734729e1edf/server/26.3.29.7/Dockerfile.alpine
-FROM postgres:18-alpine AS postgres
+ARG CLICKHOUSE_VERSION=26.3-alpine
 # See: https://github.com/docker-library/postgres/blob/e00e1bd34ec5c8a8e7ad89b273b3d42efaf6d5bc/18/alpine3.24/Dockerfile
-FROM redis:8-alpine AS redis
+ARG POSTGRES_VERSION=18-alpine
 # See: https://github.com/redis/docker-library-redis/blob/8.2.9/alpine/Dockerfile
+ARG REDIS_VERSION=8-alpine
+
+# -- Declare images --
+FROM uptrace/uptrace:${UPTRACE_VERSION} AS uptrace
+FROM clickhouse/clickhouse-server:${CLICKHOUSE_VERSION} AS clickhouse
+FROM postgres:${POSTGRES_VERSION} AS postgres
+FROM redis:${REDIS_VERSION} AS redis
 
 FROM alpine:latest
-
 # -- Declare variables --
 ENV CLICKHOUSE_DB=uptrace CLICKHOUSE_USER=uptrace CLICKHOUSE_PASSWORD=uptrace
 ENV POSTGRES_DB=uptrace POSTGRES_USER=uptrace POSTGRES_PASSWORD=uptrace
