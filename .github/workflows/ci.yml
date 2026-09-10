@@ -1,0 +1,112 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build image
+        run: docker build -t onetrace:ci .
+
+      - name: Save image to a tarball
+        run: docker save onetrace:ci -o onetrace.tar
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: onetrace-image
+          path: onetrace.tar
+          retention-days: 1
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: onetrace-image
+
+      - name: Load image
+        run: docker load -i onetrace.tar
+
+      - name: Start container
+        run: docker run -d --name onetrace -p 8080:14318 -p 8081:4317 onetrace:ci
+
+      - name: Wait for the UI to come up
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ || true)
+            [ "$code" = "200" ] && { echo "ready after ${i}s"; exit 0; }
+            sleep 2
+          done
+          echo "onetrace did not become ready in time"
+          exit 1
+
+      - name: UI responds
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/)
+          test "$code" = "200"
+
+      - name: OTLP/HTTP endpoint is live
+        run: |
+          # An empty payload is rejected (400), which still proves the OTLP
+          # receiver is up and parsing requests rather than refusing the connection.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/v1/traces \
+            -H 'Content-Type: application/x-protobuf' --data-binary '')
+          case "$code" in 200|400) ;; *) echo "unexpected status $code"; exit 1 ;; esac
+
+      - name: OTLP/gRPC port is open
+        run: nc -z -w2 127.0.0.1 8081
+
+      - name: Internal services (Postgres/ClickHouse/Redis) are healthy
+        run: |
+          docker exec onetrace /usr/local/bin/redis-cli ping
+          docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yml pg ping
+          docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yml ch ping
+
+      - name: Container shuts down cleanly
+        run: |
+          docker stop -t 15 onetrace
+          code=$(docker inspect -f '{{.State.ExitCode}}' onetrace)
+          test "$code" = "0"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker logs onetrace || true
+
+  push:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: onetrace-image
+
+      - name: Load image
+        run: docker load -i onetrace.tar
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push
+        run: |
+          image=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          docker tag onetrace:ci "$image:${{ github.sha }}"
+          docker tag onetrace:ci "$image:latest"
+          docker push "$image:${{ github.sha }}"
+          docker push "$image:latest"
