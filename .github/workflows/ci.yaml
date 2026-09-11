@@ -182,7 +182,7 @@ jobs:
         run: docker logs onetrace || true
 
   push:
-    needs: [build, test]
+    needs: [ build, test ]
     if: >
       needs.build.outputs.should_push == 'true' &&
       github.ref == 'refs/heads/main' &&
