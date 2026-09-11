@@ -5,6 +5,11 @@ on:
     branches: [ main ]
   pull_request:
   workflow_dispatch:
+    inputs:
+      force:
+        description: Publish even if nothing changed (bumps the revision)
+        type: boolean
+        default: false
   schedule:
     - cron: '30 1 * * 1' # Check for new Uptrace releases every Monday at 1:30 AM UTC
 
@@ -64,6 +69,7 @@ jobs:
           set -e
           image=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           uptrace_version="${{ steps.uptrace.outputs.version }}"
+          force="${{ github.event.inputs.force }}"
 
           last_labels=$(docker buildx imagetools inspect "${image}:latest" --format '{{json .Image.Config.Labels}}' 2>/dev/null || true)
 
@@ -81,12 +87,12 @@ jobs:
               echo "Uptrace version changed: $last_uptrace -> $uptrace_version"
               revision=0
               should_push=true
-            elif [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yaml 2>/dev/null; then
+            elif [ "$force" != "true" ] && [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yaml 2>/dev/null; then
               echo "Uptrace version unchanged ($uptrace_version) and no relevant file changed since $last_sha."
               revision="$last_revision"
               should_push=false
             else
-              echo "Relevant files changed since $last_sha (or it couldn't be compared)."
+              echo "Relevant files changed since $last_sha, or forced (or it couldn't be compared)."
               revision=$((last_revision + 1))
               should_push=true
             fi
