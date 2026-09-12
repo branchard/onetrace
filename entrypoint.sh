@@ -4,6 +4,14 @@ set -Eeo pipefail
 UPTRACE="/uptrace --config=/etc/uptrace/uptrace.yaml"
 uptrace_pid=""
 
+# Prefixes a service's combined stdout/stderr with a tag, without changing its
+# PID: `> >(...)` redirects output through the tagger as a side process, so
+# "$!" right after still refers to the service itself (a plain `| awk ...`
+# pipe would make "$!" refer to awk instead, breaking kill/wait below).
+tag() {
+	awk -v tag="$1" '{ print tag " " $0; fflush() }'
+}
+
 terminate() {
 	trap - TERM INT
 	kill -TERM "$ch_pid" "$redis_pid" "$uptrace_pid" 2>/dev/null || true
@@ -15,13 +23,13 @@ trap 'terminate; exit 0' TERM INT
 # ClickHouse's entrypoint only runs its init/bootstrap logic when called with no
 # arguments (any argument makes it exec that argument directly instead). See
 # https://github.com/ClickHouse/docker-library
-/clickhouse-entrypoint.sh &
+/clickhouse-entrypoint.sh > >(tag "[ClickHouse]") 2>&1 &
 ch_pid=$!
 
-/usr/local/bin/postgres-entrypoint.sh postgres &
+/usr/local/bin/postgres-entrypoint.sh postgres > >(tag "[Postgres]") 2>&1 &
 pg_pid=$!
 
-/usr/local/bin/redis-entrypoint.sh redis-server &
+/usr/local/bin/redis-entrypoint.sh redis-server > >(tag "[Redis]") 2>&1 &
 redis_pid=$!
 
 # init/migrate are idempotent, so retry the pair together: ClickHouse briefly
@@ -35,7 +43,7 @@ until $UPTRACE ch init && $UPTRACE ch migrate; do sleep 1; done
 
 until /usr/local/bin/redis-cli ping >/dev/null 2>&1; do sleep 1; done
 
-$UPTRACE serve &
+$UPTRACE serve > >(tag "[Uptrace]") 2>&1 &
 uptrace_pid=$!
 
 # If any one service dies, tear down the rest rather than limping along.
