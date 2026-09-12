@@ -12,6 +12,14 @@ tag() {
 	awk -v tag="$1" '{ print tag " " $0; fflush() }'
 }
 
+report_crash() {
+	for entry in "ClickHouse:$ch_pid" "Postgres:$pg_pid" "Redis:$redis_pid" "Uptrace:$uptrace_pid"; do
+		name="${entry%%:*}"
+		pid="${entry#*:}"
+		kill -0 "$pid" 2>/dev/null || echo "[$name] exited unexpectedly, shutting down the rest." >&2
+	done
+}
+
 terminate() {
 	trap - TERM INT
 	kill -TERM "$ch_pid" "$redis_pid" "$uptrace_pid" 2>/dev/null || true
@@ -48,5 +56,6 @@ uptrace_pid=$!
 
 # If any one service dies, tear down the rest rather than limping along.
 wait -n "$ch_pid" "$pg_pid" "$redis_pid" "$uptrace_pid" || true
+report_crash
 terminate
 exit 1
