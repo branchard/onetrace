@@ -31,9 +31,6 @@ docker run -d \
   -e ADMIN_PASSWORD=change-me \
   -e ORG_NAME=MyOrg \
   -e PROJECT_NAME=MyProject \
-  -v onetrace-clickhouse:/var/lib/clickhouse \
-  -v onetrace-postgres:/var/lib/postgresql \
-  -v onetrace-redis:/data \
   ghcr.io/branchard/onetrace:latest
 ```
 
