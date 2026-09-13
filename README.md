@@ -31,6 +31,7 @@ docker run -d \
   -e ADMIN_PASSWORD=change-me \
   -e ORG_NAME=MyOrg \
   -e PROJECT_NAME=MyProject \
+  --mount type=bind,source="$(pwd)"/data,target=/volumes \
   ghcr.io/branchard/onetrace:latest
 ```
 
@@ -87,7 +88,22 @@ volumes:
 
 PostgreSQL/ClickHouse credentials (`POSTGRES_*` / `CLICKHOUSE_*` env vars, all default to `uptrace`) are internal to the container and hardcoded as such in the `uptrace.yaml`.
 
-Data is persisted through three volumes: `/var/lib/clickhouse`, `/var/lib/postgresql`, `/data` (Redis).
+### Data persistence
+
+ClickHouse, PostgreSQL and Redis each write their data under `/volumes/clickhouse`, `/volumes/postgresql` and 
+`/volumes/redis` respectively — `/var/lib/clickhouse`, `/var/lib/postgresql` and `/data` are just symlinks to those. 
+You can mount either:
+
+- **One combined volume** at `/volumes` — everything in a single mount:
+  ```bash
+  -v data:/volumes
+  ```
+- **Three separate volumes**, one per service, mounted directly at the legacy paths — Docker follows the symlink, so each still ends up under the matching `/volumes/*` subfolder:
+  ```bash
+  -v clickhouse-data:/var/lib/clickhouse -v postgres-data:/var/lib/postgresql -v redis-data:/data
+  ```
+
+Use three volumes if you want independent backup/retention per service; one is simpler otherwise.
 
 ## Image tags
 
