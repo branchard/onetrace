@@ -56,9 +56,7 @@ services:
       PROJECT_NAME: MyProject
       PROJECT_TOKEN: change-me-in-production
     volumes:
-      - clickhouse-data:/var/lib/clickhouse
-      - postgres-data:/var/lib/postgresql
-      - redis-data:/data
+      - data:/volumes
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:14318/"]
       interval: 10s
@@ -67,9 +65,7 @@ services:
       start_period: 60s
 
 volumes:
-  clickhouse-data:
-  postgres-data:
-  redis-data:
+  data:
 ```
 
 ## Configuration

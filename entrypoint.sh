@@ -28,6 +28,15 @@ terminate() {
 }
 trap 'terminate; exit 0' TERM INT
 
+# A named Docker volume gets these subdirectories (with their ownership) from
+# the image automatically on its first mount, but a plain bind mount to an
+# empty host directory does not — recreate them every start so /volumes works
+# as a single mount point either way.
+mkdir -p /volumes/clickhouse /volumes/postgresql /volumes/redis
+chown clickhouse:clickhouse /volumes/clickhouse
+chown postgres:postgres /volumes/postgresql
+chown redis:redis /volumes/redis
+
 # ClickHouse's entrypoint only runs its init/bootstrap logic when called with no
 # arguments (any argument makes it exec that argument directly instead). See
 # https://github.com/ClickHouse/docker-library

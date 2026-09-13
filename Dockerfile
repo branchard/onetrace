@@ -50,11 +50,12 @@ RUN cp /usr/share/zoneinfo/UTC /etc/localtime \
     && echo "UTC" > /etc/timezone \
     && addgroup -S -g 101 clickhouse \
     && adduser -S -h /var/lib/clickhouse -s /bin/bash -G clickhouse -g "ClickHouse server" -u 101 clickhouse \
-    && mkdir -p /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server/users.d /docker-entrypoint-initdb.d \
-    && chown clickhouse:clickhouse /var/lib/clickhouse \
+    && mkdir -p /volumes/clickhouse /var/log/clickhouse-server /etc/clickhouse-server/users.d /docker-entrypoint-initdb.d \
+    && chown clickhouse:clickhouse /volumes/clickhouse \
     && chown root:clickhouse /var/log/clickhouse-server \
-    && chmod ugo+Xrw -R /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-client /etc/clickhouse-server
-VOLUME /var/lib/clickhouse
+    && chmod ugo+Xrw -R /volumes/clickhouse /var/log/clickhouse-server /etc/clickhouse-client /etc/clickhouse-server \
+    && rm -rf /var/lib/clickhouse \
+    && ln -s /volumes/clickhouse /var/lib/clickhouse
 
 # -- PostgreSQL --
 # Built for musl/Alpine already, so no glibc-compat dance is needed here: copy
@@ -74,10 +75,10 @@ RUN mv /usr/local/bin/docker-entrypoint.sh /usr/local/bin/postgres-entrypoint.sh
         libxml2 libxslt lz4-libs zstd-libs zstd \
     && addgroup -g 70 -S postgres \
     && adduser -u 70 -S -D -G postgres -H -h /var/lib/postgresql -s /bin/sh postgres \
-    && install -d -o postgres -g postgres -m 1777 /var/lib/postgresql \
-    && install -d -o postgres -g postgres -m 3777 /var/run/postgresql
+    && install -d -o postgres -g postgres -m 1777 /volumes/postgresql \
+    && install -d -o postgres -g postgres -m 3777 /var/run/postgresql \
+    && ln -s /volumes/postgresql /var/lib/postgresql
 ENV PGDATA=/var/lib/postgresql/18/docker
-VOLUME /var/lib/postgresql
 
 # -- Redis --
 # Also musl/Alpine-native: same approach as PostgreSQL above.
@@ -86,10 +87,14 @@ RUN mv /usr/local/bin/docker-entrypoint.sh /usr/local/bin/redis-entrypoint.sh \
     && apk add --no-cache tzdata setpriv \
     && addgroup -S -g 1000 redis \
     && adduser -S -G redis -u 999 redis \
-    && mkdir -p /data && chown redis:redis /data
-VOLUME /data
+    && mkdir -p /volumes/redis && chown redis:redis /volumes/redis \
+    && ln -s /volumes/redis /data
 # redis-server resolves its data dir relative to the cwd; the other services use absolute paths so this only affects redis.
 WORKDIR /data
+
+# All three services persist under a single mount point, so the image can be
+# used with just one volume/bind mount instead of three.
+VOLUME /volumes
 
 # Orchestration: start ClickHouse, PostgreSQL and Redis, wait for them to be
 # ready, then run uptrace in the foreground. See entrypoint.sh.

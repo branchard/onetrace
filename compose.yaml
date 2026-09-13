@@ -21,9 +21,7 @@ services:
       PROJECT_NAME: MyProject
       PROJECT_TOKEN: change-me-in-production
     volumes:
-      - clickhouse-data:/var/lib/clickhouse
-      - postgres-data:/var/lib/postgresql
-      - redis-data:/data
+      - data:/volumes
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:14318/"]
       interval: 10s
@@ -69,6 +67,4 @@ services:
       - --otlp-header=uptrace-dsn="http://project1_secret@onetrace:4317/1"
 
 volumes:
-  clickhouse-data:
-  postgres-data:
-  redis-data:
+  data:
