@@ -39,7 +39,7 @@ seed_data:
   user_tokens:
     - key: user_token1
       user_key: user1
-      token: user1_secret
+      token: ${ADMIN_TOKEN}
   orgs:
     - key: org1
       name: ${ORG_NAME}
@@ -55,7 +55,7 @@ seed_data:
   project_tokens:
     - key: project_token1
       project_key: project1
-      token: project1_secret
+      token: ${PROJECT_TOKEN}
   project_users:
     - key: project_user1
       project_key: project1
@@ -107,7 +107,7 @@ mailer:
     enabled: false
 
 self_monitoring:
-  dsn: http://project1_secret@localhost?grpc=4317
+  dsn: http://${PROJECT_TOKEN}@localhost?grpc=4317
 
 logging:
   level: WARN

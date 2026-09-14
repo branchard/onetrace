@@ -31,9 +31,8 @@ services:
 
   # Sends a continuous stream of synthetic logs, so there's something to look
   # at in the UI right after startup. Uses the official OpenTelemetry load
-  # generator (no custom image needed). The DSN below is project "Project1"
-  # / token "project1_secret" from the default uptrace.yaml — update it if you
-  # mount your own config.
+  # generator (no custom image needed). The DSN below reuses onetrace's own
+  # PROJECT_TOKEN, so it stays in sync automatically.
   demo-logs:
     image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest
     depends_on:
@@ -46,7 +45,7 @@ services:
       - --service=demo
       - --otlp-endpoint=onetrace:4317
       - --otlp-insecure
-      - --otlp-header=uptrace-dsn="http://project1_secret@onetrace:4317/1"
+      - --otlp-header=uptrace-dsn="http://${PROJECT_TOKEN:-change-me-in-production}@onetrace:4317/1"
 
   # Same idea, but for metrics. telemetrygen only generates one signal type
   # per process, hence the separate service (add a third one for traces the
@@ -64,7 +63,7 @@ services:
       - --service=demo
       - --otlp-endpoint=onetrace:4317
       - --otlp-insecure
-      - --otlp-header=uptrace-dsn="http://project1_secret@onetrace:4317/1"
+      - --otlp-header=uptrace-dsn="http://${PROJECT_TOKEN:-change-me-in-production}@onetrace:4317/1"
 
 volumes:
   data:

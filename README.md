@@ -13,11 +13,12 @@
 | [PostgreSQL](https://www.postgresql.org/) | App metadata (users, projects, dashboards) |
 | [Redis](https://github.com/redis/redis) | Caching |
 
-All four run as sibling processes inside the same container, supervised by [`entrypoint.sh`](entrypoint.sh): PostgreSQL/ClickHouse/Redis start first, `uptrace` waits for them and runs its migrations, then serves traffic. If any process dies, the others are torn down with it.
+All four run as sibling processes inside the same container, supervised by [`entrypoint.sh`](entrypoint.sh): 
+PostgreSQL/ClickHouse/Redis start first, `uptrace` waits for them and runs its migrations, then serves traffic. 
+If any process dies, the others are torn down with it.
 
-PostgreSQL, ClickHouse and Redis are **internal only** — nothing but Uptrace's own ports are exposed.
-
-Uptrace's configuration file is baked into the image — configure it through the environment variables below rather than editing it directly.
+Uptrace's configuration file is baked into the image — configure it through the environment variables below rather 
+than editing it directly.
 
 ## Usage
 
@@ -29,8 +30,10 @@ docker run -d \
   -e SECRET=change-me \
   -e ADMIN_EMAIL=admin@example.com \
   -e ADMIN_PASSWORD=change-me \
+  -e ADMIN_TOKEN=change-me \
   -e ORG_NAME=MyOrg \
   -e PROJECT_NAME=MyProject \
+  -e PROJECT_TOKEN=change-me \
   --mount type=bind,source="$(pwd)"/data,target=/volumes \
   ghcr.io/branchard/onetrace:latest
 ```
@@ -82,11 +85,11 @@ volumes:
 | `SECRET` | ✅ | — | Secret used to sign JWTs |
 | `ADMIN_EMAIL` | ✅ | — | Bootstrap admin user email |
 | `ADMIN_PASSWORD` | ✅ | — | Bootstrap admin user password |
+| `ADMIN_TOKEN` | ✅ | — | API token for the bootstrap admin user |
 | `ORG_NAME` | ✅ | — | Bootstrap organization name |
 | `PROJECT_NAME` | ✅ | — | Bootstrap project name |
+| `PROJECT_TOKEN` | ✅ | — | DSN token used to send telemetry to the bootstrap project |
 | `SITE_URL` | | `http://localhost:14318` | Public URL of the UI |
-
-PostgreSQL/ClickHouse credentials (`POSTGRES_*` / `CLICKHOUSE_*` env vars, all default to `uptrace`) are internal to the container and hardcoded as such in the `uptrace.yaml`.
 
 ### Data persistence
 
@@ -112,3 +115,8 @@ Published to `ghcr.io/branchard/onetrace` on every change to `main` or on new Up
 - `latest`
 - `<uptrace-version>-<revision>` (e.g. `2.0.3-1`)
 - `<uptrace-version>`, `<major.minor>`, `<major>` (e.g. `2.0.3`, `2.0`, `2`)
+
+## Security considerations
+
+- Do not publish PostgreSQL, ClickHouse and Redis ports. Their credentials are hardcoded.
+- There's no TLS termination built in — put a reverse proxy in front if you expose the UI/OTLP endpoints beyond localhost.
