@@ -71,7 +71,7 @@ ch_cluster:
         - addr: localhost:9000
           database: uptrace
           user: uptrace
-          password: uptrace
+          password: ${CLICKHOUSE_PASSWORD}
           dial_timeout: 3s
           write_timeout: 5s
           max_retries: 3
@@ -80,7 +80,7 @@ ch_cluster:
 pg:
   addr: localhost:5432
   user: uptrace
-  password: uptrace
+  password: ${POSTGRES_PASSWORD}
   database: uptrace
 
 ch_schema:

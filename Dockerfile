@@ -21,8 +21,10 @@ ARG CLICKHOUSE_VERSION
 ARG POSTGRES_VERSION
 ARG REDIS_VERSION
 
-ENV CLICKHOUSE_DB=uptrace CLICKHOUSE_USER=uptrace CLICKHOUSE_PASSWORD=uptrace
-ENV POSTGRES_DB=uptrace POSTGRES_USER=uptrace POSTGRES_PASSWORD=uptrace
+# Passwords generated with: `head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n'`
+# Never change those values or the pre-existing containers will no longer be able to connect to the database
+ENV CLICKHOUSE_DB=uptrace CLICKHOUSE_USER=uptrace CLICKHOUSE_PASSWORD=5c44ec76d53c7e71b7547ecc2ba5d21c
+ENV POSTGRES_DB=uptrace POSTGRES_USER=uptrace POSTGRES_PASSWORD=08d460cb615355d11a9bb4776e7a026e
 
 # -- Dependencies --
 RUN apk --update add --no-cache ca-certificates bash tzdata
@@ -79,6 +81,9 @@ RUN mv /usr/local/bin/docker-entrypoint.sh /usr/local/bin/postgres-entrypoint.sh
     && install -d -o postgres -g postgres -m 3777 /var/run/postgresql \
     && ln -s /volumes/postgresql /var/lib/postgresql
 ENV PGDATA=/var/lib/postgresql/18/docker
+# Without this, initdb defaults to `trust` for local/127.0.0.1 connections
+# regardless of POSTGRES_PASSWORD, so anyone in the container could connect as any user without a password.
+ENV POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256"
 
 # -- Redis --
 # Also musl/Alpine-native: same approach as PostgreSQL above.
