@@ -30,84 +30,28 @@ services:
       retries: 10
       start_period: 60s
 
-  # Sends a continuous stream of synthetic logs, so there's something to look
-  # at in the UI right after startup. Uses the official OpenTelemetry load
-  # generator (no custom image needed). The DSN below reuses onetrace's own
-  # PROJECT_TOKEN, so it stays in sync automatically.
-  demo-logs:
-    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest
-    depends_on:
-      onetrace:
-        condition: service_healthy
-    command:
-      - logs
-      - --duration=inf
-      - --rate=2
-      - --service=demo
-      - --otlp-endpoint=onetrace:4317
-      - --otlp-insecure
-      - --otlp-header=uptrace-dsn="http://${PROJECT_TOKEN:-change-me-in-production}@onetrace:4317/1"
-
-  # Same idea, but for metrics. telemetrygen only generates one signal type per
-  # process, hence one service per signal.
-  demo-metrics:
-    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest
-    depends_on:
-      onetrace:
-        condition: service_healthy
-    command:
-      - metrics
-      - --duration=inf
-      - --rate=1
-      - --metric-type=Gauge
-      - --service=demo
-      - --otlp-endpoint=onetrace:4317
-      - --otlp-insecure
-      - --otlp-header=uptrace-dsn="http://${PROJECT_TOKEN:-change-me-in-production}@onetrace:4317/1"
-
-  # And traces. Each trace is a root span plus --child-spans children (1 by default), so this sends roughly
-  # 2 spans/s — enough to populate the Traces view with a real parent/child
-  # waterfall.
-  demo-traces:
-    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest
-    depends_on:
-      onetrace:
-        condition: service_healthy
-    command:
-      - traces
-      - --duration=inf
-      - --rate=1
-      - --service=demo
-      - --otlp-endpoint=onetrace:4317
-      - --otlp-insecure
-      - --otlp-header=uptrace-dsn="http://${PROJECT_TOKEN:-change-me-in-production}@onetrace:4317/1"
-
-  # And events. telemetrygen has no events signal, and in OTLP an event is not a
-  # top-level record anyway: it is attached to a span. So this posts OTLP/JSON
-  # directly — one `checkout` span carrying two named events, which Uptrace files
-  # under Events rather than Traces. (An event named `exception` is special:
-  # Uptrace turns it into an error log instead.)
-  demo-events:
-    image: curlimages/curl:latest
+  # Synthetic traffic for the local stack: a frontend → api → db/cache request
+  # flow, emitting correlated traces, span events, logs and metrics for all of
+  # them, plus a recurring database incident so the error views have a real
+  # cluster to group rather than uniform background noise.
+  #
+  # See demo.ts. It has no dependencies — Bun's fetch is enough and Uptrace's
+  # OTLP/HTTP receiver takes plain JSON — so there is nothing to install and no
+  # lockfile to keep up to date.
+  demo:
+    image: oven/bun:1-alpine
     depends_on:
       onetrace:
         condition: service_healthy
     environment:
+      OTLP_ENDPOINT: http://onetrace:14318
       PROJECT_TOKEN: ${PROJECT_TOKEN:-change-me-in-production}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        while :; do
-          now=$$(date +%s)000000000
-          # Trace and span ids are 16 and 8 random bytes, hex-encoded.
-          tid=$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
-          sid=$$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')
-          curl -sS -o /dev/null -X POST http://onetrace:14318/v1/traces \
-            -H 'Content-Type: application/json' \
-            -H "uptrace-dsn: http://$${PROJECT_TOKEN}@onetrace:14318/1" \
-            -d "$$(printf '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"demo"}}]},"scopeSpans":[{"spans":[{"traceId":"%s","spanId":"%s","name":"checkout","kind":2,"startTimeUnixNano":"%s","endTimeUnixNano":"%s","events":[{"timeUnixNano":"%s","name":"cart.updated","attributes":[{"key":"cart.items","value":{"intValue":"3"}}]},{"timeUnixNano":"%s","name":"payment.authorized","attributes":[{"key":"payment.amount","value":{"doubleValue":42.5}}]}]}]}]}]}' "$$tid" "$$sid" "$$now" "$$now" "$$now" "$$now")"
-          sleep 5
-        done
+      DEMO_RATE: 5          # simulated requests per second
+      DEMO_CYCLE_S: 120     # one incident every two minutes...
+      DEMO_INCIDENT_S: 30   # ...lasting thirty seconds
+    volumes:
+      - ./demo.ts:/demo.ts:ro
+    command: ["bun", "/demo.ts"]
 
 volumes:
   data:
