@@ -105,8 +105,11 @@ VOLUME /volumes
 # ready, then run uptrace in the foreground. See entrypoint.sh.
 COPY entrypoint.sh /entrypoint.sh
 COPY uptrace.yaml /etc/uptrace/uptrace.yaml
-# Staged outside /etc/clickhouse-server/config.d/ on purpose: that directory is
-# scanned automatically, so dropping the file there would apply the profile
+# ClickHouse's defaults assume a dedicated host; these corrections cost nothing
+# here, so they always apply. config.d is merged alphabetically, hence the 10-.
+COPY clickhouse-tuning.xml /etc/clickhouse-server/config.d/10-onetrace.xml
+# The low-memory profile is staged outside config.d on purpose: that directory is
+# scanned automatically, so dropping the file there would apply it
 # unconditionally. entrypoint.sh copies it in when LOW_MEMORY is set.
 COPY clickhouse-low-memory.xml /usr/share/onetrace/clickhouse-low-memory.xml
 RUN chmod +x /entrypoint.sh

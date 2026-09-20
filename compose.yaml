@@ -20,7 +20,7 @@ services:
       ORG_NAME: MyOrg
       PROJECT_NAME: MyProject
       PROJECT_TOKEN: change-me-in-production
-      LOW_MEMORY: ${LOW_MEMORY:-1}
+      LOW_MEMORY: ${LOW_MEMORY-}
     volumes:
       - data:/volumes
     healthcheck:

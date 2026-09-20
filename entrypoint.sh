@@ -37,12 +37,12 @@ chown clickhouse:clickhouse /volumes/clickhouse
 chown postgres:postgres /volumes/postgresql
 chown redis:redis /volumes/redis
 
-# Optional low-memory profile. ClickHouse and Uptrace both ship defaults sized
-# for a dedicated host — 512 background-schedule threads, multi-GiB caches, one
-# ingestion buffer per core — which is a poor fit for a single container that
-# also runs Postgres and Redis. Off by default so the image behaves exactly like
-# upstream unless asked otherwise. See clickhouse-low-memory.xml.
-ch_low_memory_config=/etc/clickhouse-server/config.d/low-memory.xml
+# Optional low-memory profile, on top of the corrections that always apply (see
+# clickhouse-tuning.xml, baked in as config.d/10-onetrace.xml). Unlike those,
+# every setting it carries is a real trade-off: smaller caches, less merge
+# headroom, a tighter memory budget and bounded ingestion buffers. Off by default
+# so capacity is never silently reduced. See clickhouse-low-memory.xml.
+ch_low_memory_config=/etc/clickhouse-server/config.d/20-low-memory.xml
 ch_malloc_conf=""
 case "${LOW_MEMORY:-}" in
 	1 | [Tt][Rr][Uu][Ee])

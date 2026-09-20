@@ -1,0 +1,78 @@
+<!--
+    Always applied, copied straight into /etc/clickhouse-server/config.d/ by the
+    Dockerfile.
+
+    Everything here corrects an upstream default that is simply wrong for this
+    image, at no cost to query or ingestion performance: thread pools sized for
+    work that structurally cannot happen in a single non-replicated instance,
+    idle threads the pool never reclaims, and self-observability nobody reads.
+    Measured effect on an idle container: ~735 threads down to ~110, and the
+    container's memory roughly halved.
+
+    Settings that trade capacity for memory — cache ceilings, the merge pool,
+    the server memory budget — deliberately live in clickhouse-low-memory.xml
+    instead, behind the LOW_MEMORY flag.
+-->
+<clickhouse>
+    <!-- Pools for features this image cannot use: uptrace.yaml sets
+         replicated: false and distributed: false, there is a single storage
+         policy (so nothing to move), no Buffer table and no streaming engine.
+         These threads exist with no work to pick up. -->
+    <background_fetches_pool_size>1</background_fetches_pool_size>
+    <background_move_pool_size>1</background_move_pool_size>
+    <background_buffer_flush_schedule_pool_size>1</background_buffer_flush_schedule_pool_size>
+    <background_distributed_schedule_pool_size>1</background_distributed_schedule_pool_size>
+    <background_message_broker_schedule_pool_size>1</background_message_broker_schedule_pool_size>
+
+    <!-- Periodic per-table housekeeping tasks, multiplexed over the pool. The
+         default of 512 targets installations with thousands of tables; the
+         Uptrace schema has 43, and upstream's own commented-out example is 128. -->
+    <background_schedule_pool_size>16</background_schedule_pool_size>
+
+    <!-- Idle threads the global pool keeps alive instead of letting them exit.
+         The default of 1000 means it never shrinks back in practice — this one
+         setting accounted for ~146 MiB. -->
+    <max_thread_pool_free_size>32</max_thread_pool_free_size>
+    <!-- A ceiling, not an allocation: 10000 concurrent threads is unreachable
+         for a single node serving a handful of UI sessions. -->
+    <max_thread_pool_size>512</max_thread_pool_size>
+
+    <!-- Self-observability. asynchronous_metric_log alone wrote 212k rows in
+         five idle minutes at the default 1 s collection period. query_log and
+         part_log are kept: they are what you actually read to diagnose a slow
+         Uptrace, and their volume is negligible. -->
+    <asynchronous_metrics_update_period_s>60</asynchronous_metrics_update_period_s>
+    <asynchronous_heavy_metrics_update_period_s>300</asynchronous_heavy_metrics_update_period_s>
+    <asynchronous_metric_log remove="1"/>
+    <metric_log remove="1"/>
+    <query_metric_log remove="1"/>
+    <trace_log remove="1"/>
+    <text_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <query_views_log remove="1"/>
+    <asynchronous_insert_log remove="1"/>
+    <background_schedule_pool_log remove="1"/>
+    <error_log remove="1"/>
+    <backup_log remove="1"/>
+    <blob_storage_log remove="1"/>
+    <s3queue_log remove="1"/>
+
+    <!-- Server-wide memory profiler: a stack trace into trace_log at every
+         4 MiB of allocation, continuously, feeding a table removed above. -->
+    <total_memory_profiler_step>0</total_memory_profiler_step>
+    <total_memory_tracker_sample_probability>0</total_memory_tracker_sample_probability>
+
+    <!-- Already a no-op in a stock container (the server logs that it has no
+         CAP_IPC_LOCK), but explicit so that a host granting that capability
+         doesn't pin ~450 MiB of executable into unreclaimable memory. -->
+    <mlock_executable>false</mlock_executable>
+
+    <!-- The file log defaults to `trace` and to no rotation at all: ~360 MiB a
+         day, growing without bound. `information` keeps the startup lines worth
+         reading and drops nearly all of the volume. -->
+    <logger>
+        <level>information</level>
+        <size>50M</size>
+        <count>3</count>
+    </logger>
+</clickhouse>

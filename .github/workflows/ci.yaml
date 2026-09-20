@@ -87,7 +87,7 @@ jobs:
               echo "Uptrace version changed: $last_uptrace -> $uptrace_version"
               revision=0
               should_push=true
-            elif [ "$force" != "true" ] && [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yaml clickhouse-low-memory.xml 2>/dev/null; then
+            elif [ "$force" != "true" ] && [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yaml clickhouse-tuning.xml clickhouse-low-memory.xml 2>/dev/null; then
               echo "Uptrace version unchanged ($uptrace_version) and no relevant file changed since $last_sha."
               revision="$last_revision"
               should_push=false
@@ -177,6 +177,24 @@ jobs:
           docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yaml pg ping
           docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yaml ch ping
 
+      # The tuning drop-in always applies, so it has to hold without LOW_MEMORY.
+      # Read the value back from the running server rather than grepping the
+      # config: upstream's config.xml ships the same setting inside a comment,
+      # which is exactly the failure mode worth guarding against.
+      - name: ClickHouse tuning is applied by default
+        run: |
+          docker logs onetrace 2>&1 | grep -q "config.d/10-onetrace.xml" \
+            || { echo "the tuning drop-in was not merged"; exit 1; }
+          pool=$(docker exec onetrace sh -c 'clickhouse-client \
+            --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
+            --query "SELECT value FROM system.server_settings WHERE name = '"'"'background_schedule_pool_size'"'"'"')
+          test "$pool" = "16" || { echo "background_schedule_pool_size is $pool, expected 16"; exit 1; }
+          # Not in the tuning file: it is a trade-off, so it must stay default here.
+          merges=$(docker exec onetrace sh -c 'clickhouse-client \
+            --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
+            --query "SELECT value FROM system.server_settings WHERE name = '"'"'background_pool_size'"'"'"')
+          test "$merges" != "4" || { echo "background_pool_size was lowered without LOW_MEMORY"; exit 1; }
+
       - name: Container shuts down cleanly
         run: |
           docker stop -t 15 onetrace
@@ -213,17 +231,20 @@ jobs:
 
       - name: Low-memory profile is applied
         run: |
-          docker logs onetrace-lowmem 2>&1 | grep -q "config.d/low-memory.xml" \
+          docker logs onetrace-lowmem 2>&1 | grep -q "config.d/20-low-memory.xml" \
             || { echo "the drop-in was not merged"; exit 1; }
           docker exec onetrace-lowmem /uptrace --config=/etc/uptrace/uptrace.yaml ch ping
-          # Read the value back from the running server: the settings have to be
-          # applied, not merely parsed. The upstream config.xml ships the same
-          # pool settings inside a comment, which is exactly the failure mode
-          # this guards against. Credentials come from the image's own env.
-          pool=$(docker exec onetrace-lowmem sh -c 'clickhouse-client \
+          # background_pool_size is unique to this profile, and it is also the
+          # setting whose sanity check against the merge_tree thresholds refuses
+          # to start the server when the two drift apart.
+          merges=$(docker exec onetrace-lowmem sh -c 'clickhouse-client \
             --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
-            --query "SELECT value FROM system.server_settings WHERE name = '"'"'background_schedule_pool_size'"'"'"')
-          test "$pool" = "16" || { echo "background_schedule_pool_size is $pool, expected 16"; exit 1; }
+            --query "SELECT value FROM system.server_settings WHERE name = '"'"'background_pool_size'"'"'"')
+          test "$merges" = "4" || { echo "background_pool_size is $merges, expected 4"; exit 1; }
+          marks=$(docker exec onetrace-lowmem sh -c 'clickhouse-client \
+            --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
+            --query "SELECT value FROM system.server_settings WHERE name = '"'"'mark_cache_size'"'"'"')
+          test "$marks" = "134217728" || { echo "mark_cache_size is $marks, expected 134217728"; exit 1; }
 
       - name: Dump logs on failure
         if: failure()

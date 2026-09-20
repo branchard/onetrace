@@ -1,50 +1,43 @@
 <!--
-    Reduced-footprint ClickHouse profile, enabled by LOW_MEMORY=1.
+    Applied only when LOW_MEMORY is set: entrypoint.sh copies this file into
+    /etc/clickhouse-server/config.d/20-low-memory.xml. It sorts after
+    10-onetrace.xml, so anything here wins over the always-on tuning.
 
-    entrypoint.sh copies this file into /etc/clickhouse-server/config.d/ only
-    when the flag is set, so without it the server keeps the upstream defaults
-    byte for byte. ClickHouse has no conditionals in its config and `remove="1"`
-    cannot be driven by `from_env`, hence a whole file rather than a few
-    interpolated values.
-
-    Numbers in the comments below were measured on an idle container: ClickHouse
-    alone held ~945 MiB of RSS with 714 threads.
+    Unlike clickhouse-tuning.xml, every setting below is a real trade-off. They
+    saved nothing measurable on a small dataset — with the 5 GiB default,
+    mark_cache held 744 bytes — so the point is to bound growth rather than to
+    reclaim memory now. Expect slower queries once the data outgrows the caches,
+    and less merge headroom under heavy ingestion.
 -->
 <clickhouse>
-    <!-- Thread pools. The upstream config.xml ships this whole block commented
-         out, so ClickHouse's own defaults apply — sized for a dedicated host:
-         512 threads for the background schedule pool alone. -->
-    <background_schedule_pool_size>16</background_schedule_pool_size>
+    <!-- Merge and mutation concurrency. At 5 requests/s this kept up with zero
+         backlog (6081 merges, never more than 5 active parts per table), but it
+         is the setting most likely to bite at higher ingestion rates: parts
+         accumulate, queries slow, and eventually inserts are rejected with
+         "Too many parts". Raise it to 8 if system.parts stops coming back down. -->
     <background_pool_size>4</background_pool_size>
     <background_common_pool_size>2</background_common_pool_size>
-    <!-- uptrace.yaml sets replicated: false and distributed: false, and the
-         schema has no Buffer table nor any streaming engine, so these four
-         pools (64 threads) have nothing to do here. -->
-    <background_fetches_pool_size>1</background_fetches_pool_size>
-    <background_move_pool_size>1</background_move_pool_size>
-    <background_buffer_flush_schedule_pool_size>1</background_buffer_flush_schedule_pool_size>
-    <background_distributed_schedule_pool_size>1</background_distributed_schedule_pool_size>
-    <background_message_broker_schedule_pool_size>1</background_message_broker_schedule_pool_size>
-    <load_marks_threadpool_pool_size>8</load_marks_threadpool_pool_size>
-    <max_thread_pool_size>512</max_thread_pool_size>
-    <!-- How many idle threads the global pool keeps alive rather than letting
-         them exit. The default of 1000 means it never shrinks back in practice. -->
-    <max_thread_pool_free_size>32</max_thread_pool_free_size>
 
     <!-- "Require at least N free slots in the merge pool before starting X"
          thresholds. Their defaults (20, 8, 25) are sized for the default pool,
-         and ClickHouse refuses to start when any of them exceeds
-         background_pool_size * background_merges_mutations_concurrency_ratio
-         (4 * 2 = 8 here), so they have to shrink along with the pool. -->
+         and ClickHouse refuses to start when any exceeds background_pool_size *
+         background_merges_mutations_concurrency_ratio (4 * 2 = 8 here), so they
+         have to travel with the pool size above. -->
     <merge_tree>
         <number_of_free_entries_in_pool_to_lower_max_size_of_merge>2</number_of_free_entries_in_pool_to_lower_max_size_of_merge>
         <number_of_free_entries_in_pool_to_execute_mutation>2</number_of_free_entries_in_pool_to_execute_mutation>
         <number_of_free_entries_in_pool_to_execute_optimize_entire_partition>3</number_of_free_entries_in_pool_to_execute_optimize_entire_partition>
     </merge_tree>
 
-    <!-- Caches. These fill lazily, so they cost nothing at startup, but their
-         defaults (5 GiB each, 8 GiB for the uncompressed cache) leave the
-         steady-state footprint unbounded for a single-container deployment. -->
+    <!-- Parallelism when loading marks for a cold query. Largely redundant now
+         that max_thread_pool_free_size reclaims idle threads. -->
+    <load_marks_threadpool_pool_size>8</load_marks_threadpool_pool_size>
+
+    <!-- Cache ceilings. These fill lazily, so lowering them frees nothing
+         immediately; it caps the steady state instead. The defaults are 5 GiB
+         each (8 GiB uncompressed), which is unbounded for a container that also
+         runs PostgreSQL, Redis and Uptrace. A miss usually costs a decompress
+         rather than a disk read, since the files stay in the OS page cache. -->
     <mark_cache_size>134217728</mark_cache_size>                       <!-- 128 MiB -->
     <index_mark_cache_size>33554432</index_mark_cache_size>            <!--  32 MiB -->
     <primary_index_cache_size>67108864</primary_index_cache_size>      <!--  64 MiB -->
@@ -52,7 +45,8 @@
     <compiled_expression_cache_size>33554432</compiled_expression_cache_size>
     <mmap_cache_size>256</mmap_cache_size>
     <cache_size_to_ram_max_ratio>0.15</cache_size_to_ram_max_ratio>
-    <!-- Caches the Uptrace schema never touches. -->
+    <!-- Caches nothing in the Uptrace schema can populate: no query sets
+         use_uncompressed_cache, and there are no vector, text or lake tables. -->
     <uncompressed_cache_size>0</uncompressed_cache_size>
     <index_uncompressed_cache_size>0</index_uncompressed_cache_size>
     <vector_similarity_index_cache_size>0</vector_similarity_index_cache_size>
@@ -62,51 +56,10 @@
     <iceberg_metadata_files_cache_size>0</iceberg_metadata_files_cache_size>
     <parquet_metadata_cache_size>0</parquet_metadata_cache_size>
 
-    <!-- The default 0.9 ratio assumes ClickHouse owns the machine; here it
-         shares the container with Postgres, Redis and Uptrace. Both ratios are
-         resolved against the cgroup limit when there is one. -->
+    <!-- The default 0.9 assumes ClickHouse owns the machine. Both ratios resolve
+         against the cgroup limit when the container has one, so on a 2 GB host
+         this leaves ClickHouse 1 GB — enough to make a query over a very long
+         time range fail where the default would have completed. -->
     <max_server_memory_usage_to_ram_ratio>0.5</max_server_memory_usage_to_ram_ratio>
     <merges_mutations_memory_usage_to_ram_ratio>0.25</merges_mutations_memory_usage_to_ram_ratio>
-
-    <!-- Server-wide memory profiler: a stack trace into trace_log at every 4 MiB
-         of allocation, continuously. -->
-    <total_memory_profiler_step>0</total_memory_profiler_step>
-    <total_memory_tracker_sample_probability>0</total_memory_tracker_sample_probability>
-
-    <!-- The 1 s default writes ~600 rows per second into
-         asynchronous_metric_log: 212k rows after five minutes of idling. -->
-    <asynchronous_metrics_update_period_s>60</asynchronous_metrics_update_period_s>
-    <asynchronous_heavy_metrics_update_period_s>300</asynchronous_heavy_metrics_update_period_s>
-
-    <!-- Already a no-op in a stock container (the server logs that it has no
-         CAP_IPC_LOCK), but explicit so that a host granting that capability
-         doesn't pin ~450 MiB of executable into unreclaimable memory. -->
-    <mlock_executable>false</mlock_executable>
-
-    <!-- System logs. query_log and part_log are kept: they are what you need to
-         diagnose a slow Uptrace, and their volume is negligible. The rest is
-         self-observability nobody reads on a single-node deployment. -->
-    <asynchronous_metric_log remove="1"/>
-    <metric_log remove="1"/>
-    <query_metric_log remove="1"/>
-    <trace_log remove="1"/>
-    <text_log remove="1"/>
-    <processors_profile_log remove="1"/>
-    <query_views_log remove="1"/>
-    <asynchronous_insert_log remove="1"/>
-    <background_schedule_pool_log remove="1"/>
-    <error_log remove="1"/>
-    <backup_log remove="1"/>
-    <blob_storage_log remove="1"/>
-    <s3queue_log remove="1"/>
-
-    <!-- The file log defaults to `trace`: 2 MiB per 8 minutes, ~360 MiB/day of
-         writes and page cache. `information` drops nearly all of that while
-         keeping the startup lines you need to tell whether this profile was
-         actually applied. -->
-    <logger>
-        <level>information</level>
-        <size>50M</size>
-        <count>3</count>
-    </logger>
 </clickhouse>
