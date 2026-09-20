@@ -48,9 +48,8 @@ services:
       - --otlp-insecure
       - --otlp-header=uptrace-dsn="http://${PROJECT_TOKEN:-change-me-in-production}@onetrace:4317/1"
 
-  # Same idea, but for metrics. telemetrygen only generates one signal type
-  # per process, hence the separate service (add a third one for traces the
-  # same way if you want those too).
+  # Same idea, but for metrics. telemetrygen only generates one signal type per
+  # process, hence one service per signal.
   demo-metrics:
     image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest
     depends_on:
@@ -65,6 +64,50 @@ services:
       - --otlp-endpoint=onetrace:4317
       - --otlp-insecure
       - --otlp-header=uptrace-dsn="http://${PROJECT_TOKEN:-change-me-in-production}@onetrace:4317/1"
+
+  # And traces. Each trace is a root span plus --child-spans children (1 by default), so this sends roughly
+  # 2 spans/s — enough to populate the Traces view with a real parent/child
+  # waterfall.
+  demo-traces:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest
+    depends_on:
+      onetrace:
+        condition: service_healthy
+    command:
+      - traces
+      - --duration=inf
+      - --rate=1
+      - --service=demo
+      - --otlp-endpoint=onetrace:4317
+      - --otlp-insecure
+      - --otlp-header=uptrace-dsn="http://${PROJECT_TOKEN:-change-me-in-production}@onetrace:4317/1"
+
+  # And events. telemetrygen has no events signal, and in OTLP an event is not a
+  # top-level record anyway: it is attached to a span. So this posts OTLP/JSON
+  # directly — one `checkout` span carrying two named events, which Uptrace files
+  # under Events rather than Traces. (An event named `exception` is special:
+  # Uptrace turns it into an error log instead.)
+  demo-events:
+    image: curlimages/curl:latest
+    depends_on:
+      onetrace:
+        condition: service_healthy
+    environment:
+      PROJECT_TOKEN: ${PROJECT_TOKEN:-change-me-in-production}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while :; do
+          now=$$(date +%s)000000000
+          # Trace and span ids are 16 and 8 random bytes, hex-encoded.
+          tid=$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+          sid=$$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')
+          curl -sS -o /dev/null -X POST http://onetrace:14318/v1/traces \
+            -H 'Content-Type: application/json' \
+            -H "uptrace-dsn: http://$${PROJECT_TOKEN}@onetrace:14318/1" \
+            -d "$$(printf '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"demo"}}]},"scopeSpans":[{"spans":[{"traceId":"%s","spanId":"%s","name":"checkout","kind":2,"startTimeUnixNano":"%s","endTimeUnixNano":"%s","events":[{"timeUnixNano":"%s","name":"cart.updated","attributes":[{"key":"cart.items","value":{"intValue":"3"}}]},{"timeUnixNano":"%s","name":"payment.authorized","attributes":[{"key":"payment.amount","value":{"doubleValue":42.5}}]}]}]}]}]}' "$$tid" "$$sid" "$$now" "$$now" "$$now" "$$now")"
+          sleep 5
+        done
 
 volumes:
   data:
