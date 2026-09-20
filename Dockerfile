@@ -1,6 +1,6 @@
 # -- Versions --
 # See: https://github.com/uptrace/uptrace/blob/v2.0.3/cmd/uptrace/Dockerfile
-ARG UPTRACE_VERSION
+ARG UPTRACE_VERSION=latest
 # See: https://github.com/ClickHouse/docker-library/blob/e0d01891a279d0c8c03d92255aa24734729e1edf/server/26.3.29.7/Dockerfile.alpine
 ARG CLICKHOUSE_VERSION=26.3-alpine
 # See: https://github.com/docker-library/postgres/blob/e00e1bd34ec5c8a8e7ad89b273b3d42efaf6d5bc/18/alpine3.24/Dockerfile
