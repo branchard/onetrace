@@ -7,7 +7,7 @@ services:
         VERSION: dev
         VCS_REF: ""
         BUILD_DATE: ""
-        UPTRACE_VERSION: ${UPTRACE_VERSION}
+        UPTRACE_VERSION: ${UPTRACE_VERSION:-latest}
     ports:
       - "8080:14318" # Uptrace UI + OTLP/HTTP → http://localhost:8080
       - "8081:4317"  # OTLP/gRPC
@@ -20,6 +20,7 @@ services:
       ORG_NAME: MyOrg
       PROJECT_NAME: MyProject
       PROJECT_TOKEN: change-me-in-production
+      LOW_MEMORY: ${LOW_MEMORY:-1}
     volumes:
       - data:/volumes
     healthcheck:

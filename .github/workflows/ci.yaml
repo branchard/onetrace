@@ -87,7 +87,7 @@ jobs:
               echo "Uptrace version changed: $last_uptrace -> $uptrace_version"
               revision=0
               should_push=true
-            elif [ "$force" != "true" ] && [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yaml 2>/dev/null; then
+            elif [ "$force" != "true" ] && [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yaml clickhouse-low-memory.xml 2>/dev/null; then
               echo "Uptrace version unchanged ($uptrace_version) and no relevant file changed since $last_sha."
               revision="$last_revision"
               should_push=false
@@ -183,9 +183,58 @@ jobs:
           code=$(docker inspect -f '{{.State.ExitCode}}' onetrace)
           test "$code" = "0"
 
+      # The run above exercises the default profile, which never touches
+      # clickhouse-low-memory.xml. Start a second container with the flag on so
+      # the drop-in is actually parsed and applied somewhere in CI. The first
+      # container is stopped by now, so the same ports are free.
+      - name: Start container with LOW_MEMORY=1
+        run: |
+          docker run -d --name onetrace-lowmem -p 8080:14318 -p 8081:4317 \
+          -e SECRET=change-me-in-production \
+          -e SITE_URL=http://localhost:8080 \
+          -e ADMIN_EMAIL=admin@uptrace.local \
+          -e ADMIN_PASSWORD=admin \
+          -e ADMIN_TOKEN=change-me-in-production \
+          -e ORG_NAME=MyOrg \
+          -e PROJECT_NAME=MyProject \
+          -e PROJECT_TOKEN=change-me-in-production \
+          -e LOW_MEMORY=1 \
+          onetrace:ci
+
+      - name: Wait for the UI to come up (LOW_MEMORY)
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ || true)
+            [ "$code" = "200" ] && { echo "ready after ${i}s"; exit 0; }
+            sleep 2
+          done
+          echo "onetrace did not become ready in time with LOW_MEMORY=1"
+          exit 1
+
+      - name: Low-memory profile is applied
+        run: |
+          docker logs onetrace-lowmem 2>&1 | grep -q "config.d/low-memory.xml" \
+            || { echo "the drop-in was not merged"; exit 1; }
+          docker exec onetrace-lowmem /uptrace --config=/etc/uptrace/uptrace.yaml ch ping
+          # Read the value back from the running server: the settings have to be
+          # applied, not merely parsed. The upstream config.xml ships the same
+          # pool settings inside a comment, which is exactly the failure mode
+          # this guards against. Credentials come from the image's own env.
+          pool=$(docker exec onetrace-lowmem sh -c 'clickhouse-client \
+            --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
+            --query "SELECT value FROM system.server_settings WHERE name = '"'"'background_schedule_pool_size'"'"'"')
+          test "$pool" = "16" || { echo "background_schedule_pool_size is $pool, expected 16"; exit 1; }
+
       - name: Dump logs on failure
         if: failure()
-        run: docker logs onetrace || true
+        run: |
+          docker logs onetrace || true
+          docker logs onetrace-lowmem || true
+          # ClickHouse logs to files rather than stdout, so a startup failure
+          # leaves no trace in `docker logs`.
+          for c in onetrace onetrace-lowmem; do
+            docker exec -u 0 "$c" tail -50 /var/log/clickhouse-server/clickhouse-server.err.log || true
+          done
 
   push:
     needs: [ build, test ]

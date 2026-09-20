@@ -94,6 +94,25 @@ ch_schema:
   events_data: { storage_policy: default }
   metrics: { storage_policy: default }
 
+# In-memory ingestion buffers. The defaults below are Uptrace's own; entrypoint.sh
+# lowers them when LOW_MEMORY is set. max_insert_size is deliberately left alone:
+# smaller batches would mean more parts, hence more merge pressure, which works
+# against the reduced background pools of the low-memory profile.
+spans:
+  max_buffered_records: ${UPTRACE_MAX_BUFFERED_RECORDS:100e3}
+logs:
+  max_buffered_records: ${UPTRACE_MAX_BUFFERED_RECORDS:100e3}
+events:
+  max_buffered_records: ${UPTRACE_MAX_BUFFERED_RECORDS:100e3}
+metrics:
+  max_buffered_records: ${UPTRACE_MAX_BUFFERED_RECORDS:100e3}
+  max_cumulative_timeseries: ${UPTRACE_MAX_CUMULATIVE_TIMESERIES:1e6}
+
+# Per-query resource ceilings.
+trace:
+  query_limit: ${UPTRACE_QUERY_LIMIT:200000}
+  max_memory_usage_bytes: ${UPTRACE_MAX_QUERY_MEMORY:200000000}
+
 redis_cache:
   addrs:
     1: localhost:6379
@@ -107,6 +126,7 @@ mailer:
     enabled: false
 
 self_monitoring:
+  disabled: ${UPTRACE_SELF_MONITORING_DISABLED:false}
   dsn: http://${PROJECT_TOKEN}@localhost?grpc=4317
 
 logging:

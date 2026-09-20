@@ -37,10 +37,40 @@ chown clickhouse:clickhouse /volumes/clickhouse
 chown postgres:postgres /volumes/postgresql
 chown redis:redis /volumes/redis
 
+# Optional low-memory profile. ClickHouse and Uptrace both ship defaults sized
+# for a dedicated host — 512 background-schedule threads, multi-GiB caches, one
+# ingestion buffer per core — which is a poor fit for a single container that
+# also runs Postgres and Redis. Off by default so the image behaves exactly like
+# upstream unless asked otherwise. See clickhouse-low-memory.xml.
+ch_low_memory_config=/etc/clickhouse-server/config.d/low-memory.xml
+ch_malloc_conf=""
+case "${LOW_MEMORY:-}" in
+	1 | [Tt][Rr][Uu][Ee])
+		cp /usr/share/onetrace/clickhouse-low-memory.xml "$ch_low_memory_config"
+		# jemalloc defaults to 4 x ncpu arenas, each retaining its own dirty
+		# pages (~60 MiB of them measured on 12 cores).
+		ch_malloc_conf="narenas:2,dirty_decay_ms:5000,muzzy_decay_ms:0"
+		# Read by uptrace.yaml, which falls back to Uptrace's own defaults.
+		export UPTRACE_MAX_BUFFERED_RECORDS=20e3
+		export UPTRACE_MAX_CUMULATIVE_TIMESERIES=100e3
+		export UPTRACE_QUERY_LIMIT=50000
+		export UPTRACE_MAX_QUERY_MEMORY=100000000
+		export UPTRACE_SELF_MONITORING_DISABLED=true
+		echo "[onetrace] LOW_MEMORY is set: using the reduced-footprint profile."
+		;;
+	*)
+		# The container filesystem survives `docker restart`, so a profile
+		# enabled on an earlier start must not linger once LOW_MEMORY is unset.
+		rm -f "$ch_low_memory_config"
+		;;
+esac
+
 # ClickHouse's entrypoint only runs its init/bootstrap logic when called with no
 # arguments (any argument makes it exec that argument directly instead). See
 # https://github.com/ClickHouse/docker-library
-/clickhouse-entrypoint.sh > >(tag "[ClickHouse]") 2>&1 &
+# MALLOC_CONF is set as a prefix rather than exported so it reaches jemalloc (a
+# ClickHouse-only dependency) and nothing else; an empty value is a no-op.
+MALLOC_CONF="$ch_malloc_conf" /clickhouse-entrypoint.sh > >(tag "[ClickHouse]") 2>&1 &
 ch_pid=$!
 
 /usr/local/bin/postgres-entrypoint.sh postgres > >(tag "[Postgres]") 2>&1 &

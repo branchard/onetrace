@@ -90,6 +90,7 @@ volumes:
 | `PROJECT_NAME` | ✅ | — | Bootstrap project name |
 | `PROJECT_TOKEN` | ✅ | — | DSN token used to send telemetry to the bootstrap project |
 | `SITE_URL` | | `http://localhost:14318` | Public URL of the UI |
+| `LOW_MEMORY` | | disabled | Set to `1` to trade some headroom for a smaller footprint — see [Resource usage](#resource-usage) |
 
 ### Data persistence
 
@@ -107,6 +108,41 @@ You can mount either:
   ```
 
 Use three volumes if you want independent backup/retention per service; one is simpler otherwise.
+
+### Resource usage
+
+An idle container settles around **700 MiB**, almost all of it ClickHouse. Note
+that a further ~525 MiB sits outside that figure: the mapped `clickhouse` binary
+(~760 MiB on disk) shows up in the process's RSS, but those pages are file-backed
+and the kernel reclaims them under pressure. The part that is actually charged to
+the container is heap — mostly the cost of ~735 threads, since ClickHouse's
+defaults (512 background-schedule threads, multi-GiB caches, 90% of host RAM as
+its own budget) assume it owns the machine rather than sharing a container with
+PostgreSQL, Redis and Uptrace.
+
+Setting `LOW_MEMORY=1` applies a reduced-footprint profile
+([`clickhouse-low-memory.xml`](clickhouse-low-memory.xml)). Measured on an idle
+container with the demo telemetry flowing:
+
+| | Default | `LOW_MEMORY=1` |
+|---|---|---|
+| Container (`docker stats`) | 715 MiB | **320 MiB** |
+| ClickHouse heap (`RssAnon`) | 432 MiB | 121 MiB |
+| ClickHouse threads | 735 | 106 |
+| Uptrace (`VmRSS`) | 358 MiB | 213 MiB |
+| ClickHouse log writes | ~360 MiB/day | ~5 MiB/day |
+
+What you give up: queries over large time ranges may be slower with caches capped
+in the hundreds of MiB instead of gigabytes, merges run on 4 threads instead of
+16, `system.metric_log` / `trace_log` / `text_log` stop being written
+(`query_log` and `part_log` are kept), and under a sustained ingestion burst
+Uptrace drops telemetry rather than growing its buffers.
+
+Without the flag the image behaves exactly like upstream ClickHouse; the profile
+is only copied into `/etc/clickhouse-server/config.d/` when it is set. To tune it
+yourself, bind mount your own file over
+`/etc/clickhouse-server/config.d/low-memory.xml` and leave `LOW_MEMORY` unset —
+with the flag on, the entrypoint would try to overwrite your mount.
 
 ## Image tags
 
