@@ -139,7 +139,6 @@ Published to `ghcr.io/branchard/onetrace` on every change to `main` or on new Up
 ## Security considerations
 
 - Do not publish PostgreSQL, ClickHouse or Redis ports. Their credentials are hardcoded.
-- Redis has no authentication at all (`requirepass` is never set) — fine as long as its port stays unpublished.
 - There's no TLS termination built in — put a reverse proxy in front if you expose the UI/OTLP endpoints beyond
   localhost.
 
