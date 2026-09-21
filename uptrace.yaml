@@ -154,6 +154,11 @@ self_monitoring:
   disabled: ${UPTRACE_SELF_MONITORING_DISABLED:false}
   dsn: http://${PROJECT_TOKEN}@localhost?grpc=4317
 
+# Verbosity of Uptrace's own log output — the [Uptrace] lines in `docker logs` —
+# not the telemetry it stores. DEBUG, INFO, WARN (Uptrace's default is INFO) or
+# ERROR. WARN keeps the container quiet, but hides anything Uptrace treats as
+# routine: failed email sends are logged at INFO, so raise this before debugging
+# a mailer.
 logging:
   level: WARN
 
