@@ -22,7 +22,7 @@ start: ## Start containers with Docker Compose
 		exit 1; \
 	fi; \
 	echo "Latest stable Uptrace version: $${version}"; \
-	UPTRACE_VERSION=$${version} docker compose up -d --build
+	UPTRACE_VERSION=$${version} docker compose up -d --build --force-recreate
 	@echo "Open http://localhost:8080 in your browser (email: admin@uptrace.local, password: admin)"
 
 stop: ## Stop and delete all containers
