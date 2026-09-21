@@ -26,7 +26,8 @@ services:
       MAILER_FROM: ${MAILER_FROM-no-reply@uptrace.local}
       MAILER_USERNAME: ${MAILER_USERNAME-dev}
       MAILER_PASSWORD: ${MAILER_PASSWORD-dev}
-      MAILER_TLS_INSECURE: ${MAILER_TLS_INSECURE-true} # The sink's certificate is self-signed. Never carry this to a real relay.
+      # The sink's certificate is self-signed. Never carry this to a real relay.
+      MAILER_TLS_INSECURE: ${MAILER_TLS_INSECURE-true}
     volumes:
       - data:/volumes
     healthcheck:
@@ -36,12 +37,12 @@ services:
       retries: 10
       start_period: 60s
 
-  # Synthetic traffic for the local stack: a frontend → api → db/cache request flow, emitting correlated traces,
-  # span events, logs and metrics for all of them,
-  # plus a recurring database incident so the error views have a real cluster to group rather than uniform background noise.
+  # Synthetic traffic for the local stack: a frontend → api → db/cache request flow, emitting correlated traces, span
+  # events, logs and metrics for all of them, plus a recurring database incident so the error views have a real cluster
+  # to group rather than uniform background noise.
   #
-  # See demo.ts. It has no dependencies — Bun's fetch is enough,
-  # and Uptrace's OTLP/HTTP receiver takes plain JSON — so there is nothing to install and no lockfile to keep up to date.
+  # See demo.ts. It has no dependencies — Bun's fetch is enough, and Uptrace's OTLP/HTTP receiver takes plain JSON — so
+  # there is nothing to install and no lockfile to keep up to date.
   demo:
     image: oven/bun:1-alpine
     depends_on:
@@ -60,9 +61,9 @@ services:
   # Catches everything the Uptrace mailer sends, so notifications can be exercised without a real relay.
   # Read them at http://localhost:8025 — nothing leaves the machine.
   #
-  # smtp4dev rather than mailpit or mailhog: Uptrace always issues SMTP AUTH and
-  # go-mail refuses to send credentials over an unencrypted connection, so the sink has to offer STARTTLS.
-  # smtp4dev generates its own self-signed certificate at startup, which the other two would need supplied as files.
+  # smtp4dev rather than mailpit or mailhog: Uptrace always issues SMTP AUTH and go-mail refuses to send credentials
+  # over an unencrypted connection, so the sink has to offer STARTTLS. smtp4dev generates its own self-signed
+  # certificate at startup, which the other two would need supplied as files.
   maildev:
     image: rnwood/smtp4dev:v3
     environment:

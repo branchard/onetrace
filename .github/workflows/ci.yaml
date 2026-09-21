@@ -33,9 +33,8 @@ jobs:
           # Full history: "Decide" below diffs against an arbitrary past commit.
           fetch-depth: 0
 
-      # Uptrace publishes betas/rcs as regular (non-flagged) GitHub releases,
-      # so "latest release" isn't reliable. Only consider clean X.Y.Z tags
-      # from the Docker Hub image we actually pin in the Dockerfile.
+      # Uptrace publishes betas/rcs as regular (non-flagged) GitHub releases, so "latest release" isn't reliable. Only
+      # consider clean X.Y.Z tags from the Docker Hub image we actually pin in the Dockerfile.
       - name: Determine latest stable Uptrace version
         id: uptrace
         run: |
@@ -46,7 +45,8 @@ jobs:
             tags="$tags $(echo "$page" | jq -r '.results[].name')"
             url=$(echo "$page" | jq -r '.next')
           done
-          version=$(echo "$tags" | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+          version=$(echo "$tags" | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
           if [ -z "$version" ]; then
             echo "Could not determine the latest stable Uptrace version" >&2
             exit 1
@@ -61,8 +61,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Skip publishing only when both the resolved Uptrace version and
-      # the tracked source files are unchanged since whatever we last published as ":latest".
+      # Skip publishing only when both the resolved Uptrace version and the tracked source files are unchanged since
+      # whatever we last published as ":latest".
       - name: Decide whether to publish
         id: decide
         run: |
@@ -71,7 +71,8 @@ jobs:
           uptrace_version="${{ steps.uptrace.outputs.version }}"
           force="${{ github.event.inputs.force }}"
 
-          last_labels=$(docker buildx imagetools inspect "${image}:latest" --format '{{json .Image.Config.Labels}}' 2>/dev/null || true)
+          last_labels=$(docker buildx imagetools inspect "${image}:latest" \
+            --format '{{json .Image.Config.Labels}}' 2>/dev/null || true)
 
           if [ -z "$last_labels" ] || [ "$last_labels" = "null" ]; then
             echo "No image published yet."
@@ -87,7 +88,8 @@ jobs:
               echo "Uptrace version changed: $last_uptrace -> $uptrace_version"
               revision=0
               should_push=true
-            elif [ "$force" != "true" ] && [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- Dockerfile entrypoint.sh uptrace.yaml clickhouse-tuning.xml clickhouse-low-memory.xml 2>/dev/null; then
+            elif [ "$force" != "true" ] && [ -n "$last_sha" ] && git diff --quiet "$last_sha" HEAD -- \
+              Dockerfile entrypoint.sh uptrace.yaml clickhouse-tuning.xml clickhouse-low-memory.xml 2>/dev/null; then
               echo "Uptrace version unchanged ($uptrace_version) and no relevant file changed since $last_sha."
               revision="$last_revision"
               should_push=false
@@ -162,8 +164,8 @@ jobs:
 
       - name: OTLP/HTTP endpoint is live
         run: |
-          # An empty payload is rejected (400), which still proves the OTLP
-          # receiver is up and parsing requests rather than refusing the connection.
+          # An empty payload is rejected (400), which still proves the OTLP receiver is up and parsing requests rather
+          # than refusing the connection.
           code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/v1/traces \
             -H 'Content-Type: application/x-protobuf' --data-binary '')
           case "$code" in 200|400) ;; *) echo "unexpected status $code"; exit 1 ;; esac
@@ -177,10 +179,9 @@ jobs:
           docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yaml pg ping
           docker exec onetrace /uptrace --config=/etc/uptrace/uptrace.yaml ch ping
 
-      # The tuning drop-in always applies, so it has to hold without LOW_MEMORY.
-      # Read the value back from the running server rather than grepping the
-      # config: upstream's config.xml ships the same setting inside a comment,
-      # which is exactly the failure mode worth guarding against.
+      # The tuning drop-in always applies, so it has to hold without LOW_MEMORY. Read the value back from the running
+      # server rather than grepping the config: upstream's config.xml ships the same setting inside a comment, which is
+      # exactly the failure mode worth guarding against.
       - name: ClickHouse tuning is applied by default
         run: |
           docker logs onetrace 2>&1 | grep -q "config.d/10-onetrace.xml" \
@@ -201,10 +202,9 @@ jobs:
           code=$(docker inspect -f '{{.State.ExitCode}}' onetrace)
           test "$code" = "0"
 
-      # The run above exercises the default profile, which never touches
-      # clickhouse-low-memory.xml. Start a second container with the flag on so
-      # the drop-in is actually parsed and applied somewhere in CI. The first
-      # container is stopped by now, so the same ports are free.
+      # The run above exercises the default profile, which never touches clickhouse-low-memory.xml. Start a second
+      # container with the flag on so the drop-in is actually parsed and applied somewhere in CI. The first container is
+      # stopped by now, so the same ports are free.
       - name: Start container with LOW_MEMORY=1
         run: |
           docker run -d --name onetrace-lowmem -p 8080:14318 -p 8081:4317 \
@@ -234,9 +234,8 @@ jobs:
           docker logs onetrace-lowmem 2>&1 | grep -q "config.d/20-low-memory.xml" \
             || { echo "the drop-in was not merged"; exit 1; }
           docker exec onetrace-lowmem /uptrace --config=/etc/uptrace/uptrace.yaml ch ping
-          # background_pool_size is unique to this profile, and it is also the
-          # setting whose sanity check against the merge_tree thresholds refuses
-          # to start the server when the two drift apart.
+          # background_pool_size is unique to this profile, and it is also the setting whose sanity check against the
+          # merge_tree thresholds refuses to start the server when the two drift apart.
           merges=$(docker exec onetrace-lowmem sh -c 'clickhouse-client \
             --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
             --query "SELECT value FROM system.server_settings WHERE name = '"'"'background_pool_size'"'"'"')
@@ -251,8 +250,7 @@ jobs:
         run: |
           docker logs onetrace || true
           docker logs onetrace-lowmem || true
-          # ClickHouse logs to files rather than stdout, so a startup failure
-          # leaves no trace in `docker logs`.
+          # ClickHouse logs to files rather than stdout, so a startup failure leaves no trace in `docker logs`.
           for c in onetrace onetrace-lowmem; do
             docker exec -u 0 "$c" tail -50 /var/log/clickhouse-server/clickhouse-server.err.log || true
           done

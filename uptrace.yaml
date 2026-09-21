@@ -1,12 +1,11 @@
 ##
 ## Default onetrace configuration.
 ##
-## All services run in the same container, so they talk to each other over
-## localhost. Postgres/ClickHouse/Redis are not exposed outside the container,
-## so these default credentials are for internal use only.
+## All services run in the same container, so they talk to each other over localhost. Postgres/ClickHouse/Redis are
+## not exposed outside the container, so these default credentials are for internal use only.
 ##
-## To customize, mount your own file over /etc/uptrace/uptrace.yaml (and set the
-## matching POSTGRES_*/CLICKHOUSE_* environment variables so the two agree).
+## To customize, mount your own file over /etc/uptrace/uptrace.yaml (and set the matching POSTGRES_*/CLICKHOUSE_*
+## environment variables so the two agree).
 ## Generated with `uptrace config create`; see https://uptrace.dev/get/hosted/config.
 ##
 
@@ -25,8 +24,8 @@ listen:
 
 auth: {}
 
-# Bootstrap data created on first startup. Change the passwords/tokens (or
-# mount your own config) before exposing this beyond local use.
+# Bootstrap data created on first startup. Change the passwords/tokens (or mount your own config) before exposing this
+# beyond local use.
 seed_data:
   update: true
   delete: true
@@ -94,10 +93,9 @@ ch_schema:
   events_data: { storage_policy: default }
   metrics: { storage_policy: default }
 
-# In-memory ingestion buffers. The defaults below are Uptrace's own; entrypoint.sh
-# lowers them when LOW_MEMORY is set. max_insert_size is deliberately left alone:
-# smaller batches would mean more parts, hence more merge pressure, which works
-# against the reduced background pools of the low-memory profile.
+# In-memory ingestion buffers. The defaults below are Uptrace's own; entrypoint.sh lowers them when LOW_MEMORY is set.
+# max_insert_size is deliberately left alone: smaller batches would mean more parts, hence more merge pressure, which
+# works against the reduced background pools of the low-memory profile.
 spans:
   max_buffered_records: ${UPTRACE_MAX_BUFFERED_RECORDS:100e3}
 logs:
@@ -120,19 +118,16 @@ redis_cache:
   password: ''
   db: 0
 
-# No mail server is bundled in this image. Point MAILER_HOST at your relay and the
-# mailer turns itself on (entrypoint.sh derives `enabled` from it). Needed for
-# password resets, user invitations and alert notifications.
+# No mail server is bundled in this image. Point MAILER_HOST at your relay and the mailer turns itself on
+# (entrypoint.sh derives `enabled` from it). Needed for password resets, user invitations and alert notifications.
 #
-# Three things about Uptrace 2.0.3's mailer, all found the hard way — send errors
-# are logged at INFO, below this file's WARN level, while the API still returns 200:
-#   - Authentication is mandatory. There is no way to talk to a relay that does
-#     not offer AUTH: an empty auth_type is rejected with `unsupported SMTP AUTH
-#     type ""`, and credentials are never sent over an unencrypted connection.
-#   - `server_name_override` below is not cosmetic. Without it Uptrace hands Go a
-#     tls.Config with neither ServerName nor InsecureSkipVerify, and every send
-#     fails with "tls: either ServerName or InsecureSkipVerify must be specified".
-#     Pinning it to the host restores the verification Go would do by default.
+# Three things about Uptrace 2.0.3's mailer, all found the hard way — send errors are logged at INFO, below this file's
+# WARN level, while the API still returns 200:
+#   - Authentication is mandatory. There is no way to talk to a relay that does not offer AUTH: an empty auth_type is
+#     rejected with `unsupported SMTP AUTH type ""`, and credentials are never sent over an unencrypted connection.
+#   - `server_name_override` below is not cosmetic. Without it Uptrace hands Go a tls.Config with neither ServerName
+#     nor InsecureSkipVerify, and every send fails with "tls: either ServerName or InsecureSkipVerify must be
+#     specified". Pinning it to the host restores the verification Go would do by default.
 #   - There is no implicit-TLS mode, so port 465 does not work; use 587 (STARTTLS).
 mailer:
   smtp:
@@ -144,9 +139,8 @@ mailer:
     password: ${MAILER_PASSWORD:}
     from: ${MAILER_FROM:no-reply@uptrace.local}
     tls:
-      # STARTTLS is always used. MAILER_TLS_INSECURE=true keeps the encryption but
-      # skips certificate verification, for a self-signed relay on a trusted
-      # network — that is what the bundled dev sink needs.
+      # STARTTLS is always used. MAILER_TLS_INSECURE=true keeps the encryption but skips certificate verification, for
+      # a self-signed relay on a trusted network — that is what the bundled dev sink needs.
       insecure_skip_verify: ${MAILER_TLS_INSECURE:false}
       server_name_override: ${MAILER_HOST:localhost}
 
@@ -154,11 +148,9 @@ self_monitoring:
   disabled: ${UPTRACE_SELF_MONITORING_DISABLED:false}
   dsn: http://${PROJECT_TOKEN}@localhost?grpc=4317
 
-# Verbosity of Uptrace's own log output — the [Uptrace] lines in `docker logs` —
-# not the telemetry it stores. DEBUG, INFO, WARN (Uptrace's default is INFO) or
-# ERROR. WARN keeps the container quiet, but hides anything Uptrace treats as
-# routine: failed email sends are logged at INFO, so raise this before debugging
-# a mailer.
+# Verbosity of Uptrace's own log output — the [Uptrace] lines in `docker logs` — not the telemetry it stores. DEBUG,
+# INFO, WARN (Uptrace's default is INFO) or ERROR. WARN keeps the container quiet, but hides anything Uptrace treats as
+# routine: failed email sends are logged at INFO, so raise this before debugging a mailer.
 logging:
   level: WARN
 

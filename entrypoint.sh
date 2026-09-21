@@ -4,10 +4,9 @@ set -Eeo pipefail
 UPTRACE="/uptrace --config=/etc/uptrace/uptrace.yaml"
 uptrace_pid=""
 
-# Prefixes a service's combined stdout/stderr with a tag, without changing its
-# PID: `> >(...)` redirects output through the tagger as a side process, so
-# "$!" right after still refers to the service itself (a plain `| awk ...`
-# pipe would make "$!" refer to awk instead, breaking kill/wait below).
+# Prefixes a service's combined stdout/stderr with a tag, without changing its PID: `> >(...)` redirects output through
+# the tagger as a side process, so "$!" right after still refers to the service itself (a plain `| awk ...` pipe would
+# make "$!" refer to awk instead, breaking kill/wait below).
 tag() {
 	awk -v tag="$1" '{ print tag " " $0; fflush() }'
 }
@@ -28,27 +27,25 @@ terminate() {
 }
 trap 'terminate; exit 0' TERM INT
 
-# A named Docker volume gets these subdirectories (with their ownership) from
-# the image automatically on its first mount, but a plain bind mount to an
-# empty host directory does not — recreate them every start so /volumes works
-# as a single mount point either way.
+# A named Docker volume gets these subdirectories (with their ownership) from the image automatically on its first
+# mount, but a plain bind mount to an empty host directory does not — recreate them every start so /volumes works as a
+# single mount point either way.
 mkdir -p /volumes/clickhouse /volumes/postgresql /volumes/redis
 chown clickhouse:clickhouse /volumes/clickhouse
 chown postgres:postgres /volumes/postgresql
 chown redis:redis /volumes/redis
 
-# Optional low-memory profile, on top of the corrections that always apply (see
-# clickhouse-tuning.xml, baked in as config.d/10-onetrace.xml). Unlike those,
-# every setting it carries is a real trade-off: smaller caches, less merge
-# headroom, a tighter memory budget and bounded ingestion buffers. Off by default
-# so capacity is never silently reduced. See clickhouse-low-memory.xml.
+# Optional low-memory profile, on top of the corrections that always apply (see clickhouse-tuning.xml, baked in as
+# config.d/10-onetrace.xml). Unlike those, every setting it carries is a real trade-off: smaller caches, less merge
+# headroom, a tighter memory budget and bounded ingestion buffers. Off by default so capacity is never silently
+# reduced. See clickhouse-low-memory.xml.
 ch_low_memory_config=/etc/clickhouse-server/config.d/20-low-memory.xml
 ch_malloc_conf=""
 case "${LOW_MEMORY:-}" in
 	1 | [Tt][Rr][Uu][Ee])
 		cp /usr/share/onetrace/clickhouse-low-memory.xml "$ch_low_memory_config"
-		# jemalloc defaults to 4 x ncpu arenas, each retaining its own dirty
-		# pages (~60 MiB of them measured on 12 cores).
+		# jemalloc defaults to 4 x ncpu arenas, each retaining its own dirty pages
+		# (~60 MiB of them measured on 12 cores).
 		ch_malloc_conf="narenas:2,dirty_decay_ms:5000,muzzy_decay_ms:0"
 		# Read by uptrace.yaml, which falls back to Uptrace's own defaults.
 		export UPTRACE_MAX_BUFFERED_RECORDS=20e3
@@ -59,33 +56,30 @@ case "${LOW_MEMORY:-}" in
 		echo "[onetrace] LOW_MEMORY is set: using the reduced-footprint profile."
 		;;
 	*)
-		# The container filesystem survives `docker restart`, so a profile
-		# enabled on an earlier start must not linger once LOW_MEMORY is unset.
+		# The container filesystem survives `docker restart`, so a profile enabled on an earlier start must not linger
+		# once LOW_MEMORY is unset.
 		rm -f "$ch_low_memory_config"
 		;;
 esac
 
-# To Uptrace's config loader an empty variable is not an unset one: it overrides
-# the ${VAR:default} fallback in uptrace.yaml, and an empty `from` disables the
-# mailer outright. Compose passes variables the caller never set through as empty
-# strings, so drop them and let the defaults apply.
+# To Uptrace's config loader an empty variable is not an unset one: it overrides the ${VAR:default} fallback in
+# uptrace.yaml, and an empty `from` disables the mailer outright. Compose passes variables the caller never set through
+# as empty strings, so drop them and let the defaults apply.
 for v in MAILER_HOST MAILER_PORT MAILER_AUTH_TYPE MAILER_USERNAME MAILER_PASSWORD MAILER_FROM MAILER_TLS_INSECURE; do
 	[ -n "${!v:-}" ] || unset "$v"
 done
 
-# Uptrace has an explicit mailer.smtp.enabled switch, but requiring it on top of
-# MAILER_HOST would mostly be a way to configure a mailer that silently does
-# nothing. Naming a host is the intent, so derive the switch from it.
+# Uptrace has an explicit mailer.smtp.enabled switch, but requiring it on top of MAILER_HOST would mostly be a way to
+# configure a mailer that silently does nothing. Naming a host is the intent, so derive the switch from it.
 if [ -n "${MAILER_HOST:-}" ]; then
 	export MAILER_ENABLED=true
 	echo "[onetrace] Mailer enabled: ${MAILER_HOST}:${MAILER_PORT:-587}"
 fi
 
-# ClickHouse's entrypoint only runs its init/bootstrap logic when called with no
-# arguments (any argument makes it exec that argument directly instead). See
-# https://github.com/ClickHouse/docker-library
-# MALLOC_CONF is set as a prefix rather than exported so it reaches jemalloc (a
-# ClickHouse-only dependency) and nothing else; an empty value is a no-op.
+# ClickHouse's entrypoint only runs its init/bootstrap logic when called with no arguments (any argument makes it exec
+# that argument directly instead). See https://github.com/ClickHouse/docker-library
+# MALLOC_CONF is set as a prefix rather than exported so it reaches jemalloc (a ClickHouse-only dependency) and nothing
+# else; an empty value is a no-op.
 MALLOC_CONF="$ch_malloc_conf" /clickhouse-entrypoint.sh > >(tag "[ClickHouse]") 2>&1 &
 ch_pid=$!
 
@@ -95,9 +89,8 @@ pg_pid=$!
 /usr/local/bin/redis-entrypoint.sh redis-server > >(tag "[Redis]") 2>&1 &
 redis_pid=$!
 
-# init/migrate are idempotent, so retry the pair together: ClickHouse briefly
-# restarts itself between its own bootstrap and final startup, and a ping can
-# succeed against the transient instance right before it goes down.
+# init/migrate are idempotent, so retry the pair together: ClickHouse briefly restarts itself between its own bootstrap
+# and final startup, and a ping can succeed against the transient instance right before it goes down.
 until $UPTRACE pg ping >/dev/null 2>&1; do sleep 1; done
 until $UPTRACE pg init && $UPTRACE pg migrate; do sleep 1; done
 

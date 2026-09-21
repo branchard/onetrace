@@ -35,7 +35,10 @@ EXPOSE 4317 14318
 
 # -- ClickHouse --
 ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8 TZ=UTC CLICKHOUSE_CONFIG=/etc/clickhouse-server/config.xml
-COPY --from=clickhouse /lib/libc.so.6 /lib/libdl.so.2 /lib/libm.so.6 /lib/libpthread.so.0 /lib/librt.so.1 /lib/libnss_dns.so.2 /lib/libnss_files.so.2 /lib/libresolv.so.2 /lib/ld-2.35.so /lib/
+COPY --from=clickhouse \
+    /lib/libc.so.6 /lib/libdl.so.2 /lib/libm.so.6 /lib/libpthread.so.0 /lib/librt.so.1 \
+    /lib/libnss_dns.so.2 /lib/libnss_files.so.2 /lib/libresolv.so.2 /lib/ld-2.35.so \
+    /lib/
 COPY --from=clickhouse /etc/nsswitch.conf /etc/
 COPY --from=clickhouse /etc/clickhouse-server/config.d/docker_related_config.xml /etc/clickhouse-server/config.d/
 COPY --from=clickhouse /entrypoint.sh /clickhouse-entrypoint.sh
@@ -52,7 +55,8 @@ RUN cp /usr/share/zoneinfo/UTC /etc/localtime \
     && echo "UTC" > /etc/timezone \
     && addgroup -S -g 101 clickhouse \
     && adduser -S -h /var/lib/clickhouse -s /bin/bash -G clickhouse -g "ClickHouse server" -u 101 clickhouse \
-    && mkdir -p /volumes/clickhouse /var/log/clickhouse-server /etc/clickhouse-server/users.d /docker-entrypoint-initdb.d \
+    && mkdir -p \
+        /volumes/clickhouse /var/log/clickhouse-server /etc/clickhouse-server/users.d /docker-entrypoint-initdb.d \
     && chown clickhouse:clickhouse /volumes/clickhouse \
     && chown root:clickhouse /var/log/clickhouse-server \
     && chmod ugo+Xrw -R /volumes/clickhouse /var/log/clickhouse-server /etc/clickhouse-client /etc/clickhouse-server \
@@ -60,15 +64,19 @@ RUN cp /usr/share/zoneinfo/UTC /etc/localtime \
     && ln -s /volumes/clickhouse /var/lib/clickhouse
 
 # -- PostgreSQL --
-# Built for musl/Alpine already, so no glibc-compat dance is needed here: copy
-# the self-contained /usr/local tree and pull in its runtime shared libraries.
+# Built for musl/Alpine already, so no glibc-compat dance is needed here: copy the self-contained /usr/local tree and
+# pull in its runtime shared libraries.
 COPY --from=postgres /usr/local /usr/local
 RUN mv /usr/local/bin/docker-entrypoint.sh /usr/local/bin/postgres-entrypoint.sh \
-    # Drop the LLVM JIT extension: it needs a ~200MB libLLVM just for an
-    # optimization that only kicks in on very expensive queries.
-    && rm -rf /usr/local/lib/postgresql/llvmjit.so /usr/local/lib/postgresql/llvmjit_types.bc /usr/local/lib/postgresql/bitcode \
+    # Drop the LLVM JIT extension: it needs a ~200MB libLLVM just for an optimization that only kicks in on very
+    # expensive queries.
+    && rm -rf \
+        /usr/local/lib/postgresql/llvmjit.so \
+        /usr/local/lib/postgresql/llvmjit_types.bc \
+        /usr/local/lib/postgresql/bitcode \
     && mkdir -p /docker-entrypoint-initdb.d \
-    && printf '#!/bin/sh\nset -e\necho "jit = off" >> "$PGDATA/postgresql.conf"\n' > /docker-entrypoint-initdb.d/00-disable-jit.sh \
+    && printf '#!/bin/sh\nset -e\necho "jit = off" >> "$PGDATA/postgresql.conf"\n' \
+        > /docker-entrypoint-initdb.d/00-disable-jit.sh \
     && chmod +x /docker-entrypoint-initdb.d/00-disable-jit.sh \
     && apk add --no-cache \
         icu-data-full icu-libs \
@@ -81,8 +89,8 @@ RUN mv /usr/local/bin/docker-entrypoint.sh /usr/local/bin/postgres-entrypoint.sh
     && install -d -o postgres -g postgres -m 3777 /var/run/postgresql \
     && ln -s /volumes/postgresql /var/lib/postgresql
 ENV PGDATA=/var/lib/postgresql/18/docker
-# Without this, initdb defaults to `trust` for local/127.0.0.1 connections
-# regardless of POSTGRES_PASSWORD, so anyone in the container could connect as any user without a password.
+# Without this, initdb defaults to `trust` for local/127.0.0.1 connections regardless of POSTGRES_PASSWORD, so anyone in
+# the container could connect as any user without a password.
 ENV POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256"
 
 # -- Redis --
@@ -94,44 +102,42 @@ RUN mv /usr/local/bin/docker-entrypoint.sh /usr/local/bin/redis-entrypoint.sh \
     && adduser -S -G redis -u 999 redis \
     && mkdir -p /volumes/redis && chown redis:redis /volumes/redis \
     && ln -s /volumes/redis /data
-# redis-server resolves its data dir relative to the cwd; the other services use absolute paths so this only affects redis.
+# redis-server resolves its data dir relative to the cwd; the other services use absolute paths so this only affects
+# redis.
 WORKDIR /data
 
-# All three services persist under a single mount point, so the image can be
-# used with just one volume/bind mount instead of three.
+# All three services persist under a single mount point, so the image can be used with just one volume/bind mount
+# instead of three.
 VOLUME /volumes
 
-# Orchestration: start ClickHouse, PostgreSQL and Redis, wait for them to be
-# ready, then run uptrace in the foreground. See entrypoint.sh.
+# Orchestration: start ClickHouse, PostgreSQL and Redis, wait for them to be ready, then run uptrace in the foreground.
+# See entrypoint.sh.
 COPY entrypoint.sh /entrypoint.sh
 COPY uptrace.yaml /etc/uptrace/uptrace.yaml
-# ClickHouse's defaults assume a dedicated host; these corrections cost nothing
-# here, so they always apply. config.d is merged alphabetically, hence the 10-.
+# ClickHouse's defaults assume a dedicated host; these corrections cost nothing here, so they always apply. config.d is
+# merged alphabetically, hence the 10-.
 COPY clickhouse-tuning.xml /etc/clickhouse-server/config.d/10-onetrace.xml
-# The low-memory profile is staged outside config.d on purpose: that directory is
-# scanned automatically, so dropping the file there would apply it
-# unconditionally. entrypoint.sh copies it in when LOW_MEMORY is set.
+# The low-memory profile is staged outside config.d on purpose: that directory is scanned automatically, so dropping
+# the file there would apply it unconditionally. entrypoint.sh copies it in when LOW_MEMORY is set.
 COPY clickhouse-low-memory.xml /usr/share/onetrace/clickhouse-low-memory.xml
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
 # -- Labels --
-# Placed last on purpose: VERSION/VCS_REF/BUILD_DATE change on every commit,
-# and an ARG's value invalidates the build cache for every instruction after
-# its declaration in a stage — even ones that don't reference it. Declaring
-# them (and LABEL, which adds no filesystem layer) at the very end keeps the
-# actual content-producing steps above reproducible/cacheable across builds
-# that only differ by these three values.
+# Placed last on purpose: VERSION/VCS_REF/BUILD_DATE change on every commit, and an ARG's value invalidates the build
+# cache for every instruction after its declaration in a stage — even ones that don't reference it. Declaring them (and
+# LABEL, which adds no filesystem layer) at the very end keeps the actual content-producing steps above
+# reproducible/cacheable across builds that only differ by these three values.
 ARG VERSION
 ARG VCS_REF
 ARG BUILD_DATE
 LABEL org.opencontainers.image.title="onetrace" \
-      org.opencontainers.image.description="Uptrace, ClickHouse, PostgreSQL and Redis bundled in a single Docker image" \
-      org.opencontainers.image.source="https://github.com/branchard/onetrace" \
-      org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.created="${BUILD_DATE}" \
-      io.onetrace.uptrace.version="${UPTRACE_VERSION}" \
-      io.onetrace.clickhouse.version="${CLICKHOUSE_VERSION}" \
-      io.onetrace.postgres.version="${POSTGRES_VERSION}" \
-      io.onetrace.redis.version="${REDIS_VERSION}"
+    org.opencontainers.image.description="Uptrace, ClickHouse, PostgreSQL and Redis bundled in a single Docker image" \
+    org.opencontainers.image.source="https://github.com/branchard/onetrace" \
+    org.opencontainers.image.version="${VERSION}" \
+    org.opencontainers.image.revision="${VCS_REF}" \
+    org.opencontainers.image.created="${BUILD_DATE}" \
+    io.onetrace.uptrace.version="${UPTRACE_VERSION}" \
+    io.onetrace.clickhouse.version="${CLICKHOUSE_VERSION}" \
+    io.onetrace.postgres.version="${POSTGRES_VERSION}" \
+    io.onetrace.redis.version="${REDIS_VERSION}"

@@ -1,43 +1,38 @@
 <!--
     Applied only when LOW_MEMORY is set: entrypoint.sh copies this file into
-    /etc/clickhouse-server/config.d/20-low-memory.xml. It sorts after
-    10-onetrace.xml, so anything here wins over the always-on tuning.
+    /etc/clickhouse-server/config.d/20-low-memory.xml. It sorts after 10-onetrace.xml, so anything here wins over the
+    always-on tuning.
 
-    Unlike clickhouse-tuning.xml, every setting below is a real trade-off. They
-    saved nothing measurable on a small dataset — with the 5 GiB default,
-    mark_cache held 744 bytes — so the point is to bound growth rather than to
-    reclaim memory now. Expect slower queries once the data outgrows the caches,
-    and less merge headroom under heavy ingestion.
+    Unlike clickhouse-tuning.xml, every setting below is a real trade-off. They saved nothing measurable on a small
+    dataset — with the 5 GiB default, mark_cache held 744 bytes — so the point is to bound growth rather than to reclaim
+    memory now. Expect slower queries once the data outgrows the caches, and less merge headroom under heavy ingestion.
 -->
 <clickhouse>
-    <!-- Merge and mutation concurrency. At 5 requests/s this kept up with zero
-         backlog (6081 merges, never more than 5 active parts per table), but it
-         is the setting most likely to bite at higher ingestion rates: parts
-         accumulate, queries slow, and eventually inserts are rejected with
-         "Too many parts". Raise it to 8 if system.parts stops coming back down. -->
+    <!-- Merge and mutation concurrency. At 5 requests/s this kept up with zero backlog (6081 merges, never more than 5
+         active parts per table), but it is the setting most likely to bite at higher ingestion rates: parts
+         accumulate, queries slow, and eventually inserts are rejected with "Too many parts". Raise it to 8 if
+         system.parts stops coming back down. -->
     <background_pool_size>4</background_pool_size>
     <background_common_pool_size>2</background_common_pool_size>
 
-    <!-- "Require at least N free slots in the merge pool before starting X"
-         thresholds. Their defaults (20, 8, 25) are sized for the default pool,
-         and ClickHouse refuses to start when any exceeds background_pool_size *
-         background_merges_mutations_concurrency_ratio (4 * 2 = 8 here), so they
-         have to travel with the pool size above. -->
+    <!-- "Require at least N free slots in the merge pool before starting X" thresholds. Their defaults (20, 8, 25) are
+         sized for the default pool, and ClickHouse refuses to start when any exceeds background_pool_size *
+         background_merges_mutations_concurrency_ratio (4 * 2 = 8 here), so they have to travel with the pool size
+         above. -->
     <merge_tree>
         <number_of_free_entries_in_pool_to_lower_max_size_of_merge>2</number_of_free_entries_in_pool_to_lower_max_size_of_merge>
         <number_of_free_entries_in_pool_to_execute_mutation>2</number_of_free_entries_in_pool_to_execute_mutation>
         <number_of_free_entries_in_pool_to_execute_optimize_entire_partition>3</number_of_free_entries_in_pool_to_execute_optimize_entire_partition>
     </merge_tree>
 
-    <!-- Parallelism when loading marks for a cold query. Largely redundant now
-         that max_thread_pool_free_size reclaims idle threads. -->
+    <!-- Parallelism when loading marks for a cold query. Largely redundant now that max_thread_pool_free_size reclaims
+         idle threads. -->
     <load_marks_threadpool_pool_size>8</load_marks_threadpool_pool_size>
 
-    <!-- Cache ceilings. These fill lazily, so lowering them frees nothing
-         immediately; it caps the steady state instead. The defaults are 5 GiB
-         each (8 GiB uncompressed), which is unbounded for a container that also
-         runs PostgreSQL, Redis and Uptrace. A miss usually costs a decompress
-         rather than a disk read, since the files stay in the OS page cache. -->
+    <!-- Cache ceilings. These fill lazily, so lowering them frees nothing immediately; it caps the steady state
+         instead. The defaults are 5 GiB each (8 GiB uncompressed), which is unbounded for a container that also runs
+         PostgreSQL, Redis and Uptrace. A miss usually costs a decompress rather than a disk read, since the files stay
+         in the OS page cache. -->
     <mark_cache_size>134217728</mark_cache_size>                       <!-- 128 MiB -->
     <index_mark_cache_size>33554432</index_mark_cache_size>            <!--  32 MiB -->
     <primary_index_cache_size>67108864</primary_index_cache_size>      <!--  64 MiB -->
@@ -45,8 +40,8 @@
     <compiled_expression_cache_size>33554432</compiled_expression_cache_size>
     <mmap_cache_size>256</mmap_cache_size>
     <cache_size_to_ram_max_ratio>0.15</cache_size_to_ram_max_ratio>
-    <!-- Caches nothing in the Uptrace schema can populate: no query sets
-         use_uncompressed_cache, and there are no vector, text or lake tables. -->
+    <!-- Caches nothing in the Uptrace schema can populate: no query sets use_uncompressed_cache, and there are no
+         vector, text or lake tables. -->
     <uncompressed_cache_size>0</uncompressed_cache_size>
     <index_uncompressed_cache_size>0</index_uncompressed_cache_size>
     <vector_similarity_index_cache_size>0</vector_similarity_index_cache_size>
@@ -56,9 +51,8 @@
     <iceberg_metadata_files_cache_size>0</iceberg_metadata_files_cache_size>
     <parquet_metadata_cache_size>0</parquet_metadata_cache_size>
 
-    <!-- The default 0.9 assumes ClickHouse owns the machine. Both ratios resolve
-         against the cgroup limit when the container has one, so on a 2 GB host
-         this leaves ClickHouse 1 GB — enough to make a query over a very long
+    <!-- The default 0.9 assumes ClickHouse owns the machine. Both ratios resolve against the cgroup limit when the
+         container has one, so on a 2 GB host this leaves ClickHouse 1 GB — enough to make a query over a very long
          time range fail where the default would have completed. -->
     <max_server_memory_usage_to_ram_ratio>0.5</max_server_memory_usage_to_ram_ratio>
     <merges_mutations_memory_usage_to_ram_ratio>0.25</merges_mutations_memory_usage_to_ram_ratio>

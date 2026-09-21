@@ -1,8 +1,9 @@
 # Onetrace
 
-[![ci](https://github.com/branchard/onetrace/actions/workflows/ci.yaml/badge.svg)](https://github.com/branchard/onetrace/actions/workflows/ci.yaml)
+[![ci][ci-badge]][ci-workflow]
 
-[Uptrace](https://github.com/uptrace/uptrace) — with ClickHouse, PostgreSQL and Redis — packaged as a **single Docker image** for simple, self-contained deployments.
+[Uptrace](https://github.com/uptrace/uptrace) — with ClickHouse, PostgreSQL and Redis — packaged as a **single Docker
+image** for simple, self-contained deployments.
 
 ## What's inside
 
@@ -13,11 +14,11 @@
 | [PostgreSQL](https://www.postgresql.org/) | App metadata (users, projects, dashboards) |
 | [Redis](https://github.com/redis/redis) | Caching |
 
-All four run as sibling processes inside the same container, supervised by [`entrypoint.sh`](entrypoint.sh): 
-PostgreSQL/ClickHouse/Redis start first, `uptrace` waits for them and runs its migrations, then serves traffic. 
-If any process dies, the others are torn down with it.
+All four run as sibling processes inside the same container, supervised by [`entrypoint.sh`](entrypoint.sh):
+PostgreSQL/ClickHouse/Redis start first, `uptrace` waits for them and runs its migrations, then serves traffic. If any
+process dies, the others are torn down with it.
 
-Uptrace's configuration file is baked into the image — configure it through the environment variables below rather 
+Uptrace's configuration file is baked into the image — configure it through the environment variables below rather
 than editing it directly.
 
 ## Usage
@@ -91,7 +92,7 @@ volumes:
 | `PROJECT_TOKEN` | ✅ | — | DSN token used to send telemetry to the bootstrap project |
 | `SITE_URL` | | `http://localhost:14318` | Public URL of the UI |
 | `LOW_MEMORY` | | disabled | Set to `1` to trade capacity for ~120 MiB — see [Resource usage](#resource-usage) |
-| `MAILER_HOST` | | — | SMTP relay for password resets, invitations and alert notifications. Setting it enables the mailer |
+| `MAILER_HOST` | | — | SMTP relay for password resets, invitations and alerts. Setting it enables the mailer |
 | `MAILER_PORT` | | `587` | Relay port. Uptrace has no implicit-TLS mode, so use the STARTTLS port, not 465 |
 | `MAILER_AUTH_TYPE` | | `PLAIN` | `PLAIN`, `LOGIN`, `CRAM-MD5` or `XOAUTH2` |
 | `MAILER_USERNAME` | | — | Required: Uptrace 2.0.3 cannot send without authenticating |
@@ -101,15 +102,16 @@ volumes:
 
 ### Data persistence
 
-ClickHouse, PostgreSQL and Redis each write their data under `/volumes/clickhouse`, `/volumes/postgresql` and 
-`/volumes/redis` respectively — `/var/lib/clickhouse`, `/var/lib/postgresql` and `/data` are just symlinks to those. 
+ClickHouse, PostgreSQL and Redis each write their data under `/volumes/clickhouse`, `/volumes/postgresql` and
+`/volumes/redis` respectively — `/var/lib/clickhouse`, `/var/lib/postgresql` and `/data` are just symlinks to those.
 You can mount either:
 
 - **One combined volume** at `/volumes` — everything in a single mount:
   ```bash
   -v data:/volumes
   ```
-- **Three separate volumes**, one per service, mounted directly at the legacy paths — Docker follows the symlink, so each still ends up under the matching `/volumes/*` subfolder:
+- **Three separate volumes**, one per service, mounted directly at the legacy paths — Docker follows the symlink, so
+  each still ends up under the matching `/volumes/*` subfolder:
   ```bash
   -v clickhouse-data:/var/lib/clickhouse -v postgres-data:/var/lib/postgresql -v redis-data:/data
   ```
@@ -118,16 +120,13 @@ Use three volumes if you want independent backup/retention per service; one is s
 
 ## Resource usage
 
-Under a load of 5 requests/s the container holds **~710 MiB**, almost all of it
-ClickHouse. [`clickhouse-tuning.xml`](clickhouse-tuning.xml) is always applied and
-accounts for most of that: upstream defaults land at ~990 MiB, with 732 threads
-instead of 135, for no benefit in a single-container deployment.
+Under a load of 5 requests/s the container holds **~710 MiB**, almost all of it ClickHouse.
+[`clickhouse-tuning.xml`](clickhouse-tuning.xml) is always applied and accounts for most of that: upstream defaults
+land at ~990 MiB, with 732 threads instead of 135, for no benefit in a single-container deployment.
 
-`LOW_MEMORY=1` additionally applies
-[`clickhouse-low-memory.xml`](clickhouse-low-memory.xml), bringing the container to
-**~590 MiB** by capping caches, halving the server memory budget and shrinking the
-merge pool. Unlike the tuning above, these are real trade-offs: worth it on a small
-VM, costly under heavy ingestion or on a large dataset.
+`LOW_MEMORY=1` additionally applies [`clickhouse-low-memory.xml`](clickhouse-low-memory.xml), bringing the container to
+**~590 MiB** by capping caches, halving the server memory budget and shrinking the merge pool. Unlike the tuning above,
+these are real trade-offs: worth it on a small VM, costly under heavy ingestion or on a large dataset.
 
 ## Image tags
 
@@ -141,4 +140,8 @@ Published to `ghcr.io/branchard/onetrace` on every change to `main` or on new Up
 
 - Do not publish PostgreSQL, ClickHouse or Redis ports. Their credentials are hardcoded.
 - Redis has no authentication at all (`requirepass` is never set) — fine as long as its port stays unpublished.
-- There's no TLS termination built in — put a reverse proxy in front if you expose the UI/OTLP endpoints beyond localhost.
+- There's no TLS termination built in — put a reverse proxy in front if you expose the UI/OTLP endpoints beyond
+  localhost.
+
+[ci-badge]: https://github.com/branchard/onetrace/actions/workflows/ci.yaml/badge.svg
+[ci-workflow]: https://github.com/branchard/onetrace/actions/workflows/ci.yaml

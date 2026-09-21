@@ -1,15 +1,13 @@
 #!/usr/bin/env bun
 /**
- * Synthetic telemetry for the local stack: traces, span events, logs and
- * metrics for a small three-service system, all correlated by trace id.
+ * Synthetic telemetry for the local stack: traces, span events, logs and metrics for a small three-service system,
+ * all correlated by trace id.
  *
- * No dependencies. Bun ships fetch and crypto, and Uptrace's OTLP/HTTP
- * receiver accepts plain JSON, so the objects below are the wire format
- * as-is rather than an SDK's rendering of it.
+ * No dependencies. Bun ships fetch and crypto, and Uptrace's OTLP/HTTP receiver accepts plain JSON, so the objects
+ * below are the wire format as-is rather than an SDK's rendering of it.
  *
- * Traffic is steady, but the failure rate is not: every DEMO_CYCLE_S seconds
- * the simulated database starts timing out for DEMO_INCIDENT_S seconds. That
- * gives the UI a recurring incident to group errors around instead of a flat
+ * Traffic is steady, but the failure rate is not: every DEMO_CYCLE_S seconds the simulated database starts timing out
+ * for DEMO_INCIDENT_S seconds. That gives the UI a recurring incident to group errors around instead of a flat
  * background of random failures.
  */
 
@@ -22,9 +20,8 @@ const INCIDENT_S = positive("DEMO_INCIDENT_S", 30);
 const BASE_ERROR_RATE = 0.02;
 const INCIDENT_ERROR_RATE = 0.45;
 
-// One POST per signal per second rather than one per request: 5 req/s through
-// separate inserts would create five times the parts for ClickHouse to merge,
-// which matters when LOW_MEMORY caps the merge pool at 4 threads.
+// One POST per signal per second rather than one per request: 5 req/s through separate inserts would create five times
+// the parts for ClickHouse to merge, which matters when LOW_MEMORY caps the merge pool at 4 threads.
 const FLUSH_MS = 1_000;
 const METRICS_EVERY_MS = 10_000;
 
@@ -35,11 +32,7 @@ function positive(name: string, fallback: number): number {
 
 // -- OTLP wire types (only the parts used here) --
 
-type AnyValue =
-  | { stringValue: string }
-  | { intValue: string }
-  | { doubleValue: number }
-  | { boolValue: boolean };
+type AnyValue = { stringValue: string } | { intValue: string } | { doubleValue: number } | { boolValue: boolean };
 type KeyValue = { key: string; value: AnyValue };
 
 const str = (key: string, v: string): KeyValue => ({ key, value: { stringValue: v } });
@@ -78,7 +71,7 @@ const hex = (bytes: number) =>
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 const ns = (ms: number) => String(Math.round(ms * 1e6));
-const pick = <T,>(xs: readonly T[]) => xs[Math.floor(Math.random() * xs.length)]!;
+const pick = <T>(xs: readonly T[]) => xs[Math.floor(Math.random() * xs.length)]!;
 const jitter = (base: number, spread: number) => base + Math.random() * spread;
 
 // -- The simulated system --
@@ -118,17 +111,12 @@ function push<T>(m: Map<string, T[]>, key: string, v: T) {
 }
 
 const resource = (service: string) => ({
-  attributes: [
-    str("service.name", service),
-    str("service.version", "1.4.2"),
-    str("deployment.environment", "demo"),
-  ],
+  attributes: [str("service.name", service), str("service.version", "1.4.2"), str("deployment.environment", "demo")],
 });
 
 /**
- * One simulated user request: a frontend span, the api span it calls, and the
- * db/cache client spans the api makes. On failure the db times out, the error
- * propagates up the three spans, and an `exception` span event is attached —
+ * One simulated user request: a frontend span, the api span it calls, and the db/cache client spans the api makes.
+ * On failure the db times out, the error propagates up the three spans, and an `exception` span event is attached —
  * which Uptrace turns into an error log of its own.
  */
 function simulateRequest(batch: Batch, nowMs: number, failing: boolean) {
@@ -186,9 +174,7 @@ function simulateRequest(batch: Batch, nowMs: number, failing: boolean) {
           },
         ]
       : undefined,
-    status: failing
-      ? { code: STATUS.error, message: "statement timeout" }
-      : { code: STATUS.ok },
+    status: failing ? { code: STATUS.error, message: "statement timeout" } : { code: STATUS.ok },
   });
 
   batch.span("api", {

@@ -5,7 +5,8 @@ MAKEFLAGS += --no-print-directory
 ##@ Global
 help: ## Show this help
 	@# @see: https://www.avonture.be/blog/makefile-help/
-	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN { FS = ":.*##"; printf "Usage:\n  make \033[36m<target>\033[0m\n\nTargets:\n" } \
+		/^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 start: ## Start containers with Docker Compose
 	@echo "Determining latest stable Uptrace version…"; \
@@ -16,7 +17,8 @@ start: ## Start containers with Docker Compose
 		tags="$$tags $$(echo "$$page" | jq -r '.results[].name')"; \
 		url=$$(echo "$$page" | jq -r '.next'); \
 	done; \
-	version=$$(echo "$$tags" | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1); \
+	version=$$(echo "$$tags" | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$$' \
+		| sort -t. -k1,1n -k2,2n -k3,3n | tail -1); \
 	if [ -z "$${version}" ]; then \
 		echo "Could not determine the latest stable Uptrace version" >&2; \
 		exit 1; \
