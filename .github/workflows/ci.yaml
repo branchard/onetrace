@@ -28,7 +28,7 @@ jobs:
       version: ${{ steps.decide.outputs.version }}
       should_push: ${{ steps.decide.outputs.should_push }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Full history: "Decide" below diffs against an arbitrary past commit.
           fetch-depth: 0
