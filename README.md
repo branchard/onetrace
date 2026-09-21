@@ -91,6 +91,13 @@ volumes:
 | `PROJECT_TOKEN` | ✅ | — | DSN token used to send telemetry to the bootstrap project |
 | `SITE_URL` | | `http://localhost:14318` | Public URL of the UI |
 | `LOW_MEMORY` | | disabled | Set to `1` to trade capacity for ~120 MiB — see [Resource usage](#resource-usage) |
+| `MAILER_HOST` | | — | SMTP relay for password resets, invitations and alert notifications. Setting it enables the mailer |
+| `MAILER_PORT` | | `587` | Relay port. Uptrace has no implicit-TLS mode, so use the STARTTLS port, not 465 |
+| `MAILER_AUTH_TYPE` | | `PLAIN` | `PLAIN`, `LOGIN`, `CRAM-MD5` or `XOAUTH2` |
+| `MAILER_USERNAME` | | — | Required: Uptrace 2.0.3 cannot send without authenticating |
+| `MAILER_PASSWORD` | | — | |
+| `MAILER_FROM` | | `no-reply@uptrace.local` | Sender address |
+| `MAILER_TLS_INSECURE` | | `false` | Skip certificate verification — for a self-signed relay on a trusted network |
 
 ### Data persistence
 

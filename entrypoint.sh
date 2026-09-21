@@ -65,6 +65,22 @@ case "${LOW_MEMORY:-}" in
 		;;
 esac
 
+# To Uptrace's config loader an empty variable is not an unset one: it overrides
+# the ${VAR:default} fallback in uptrace.yaml, and an empty `from` disables the
+# mailer outright. Compose passes variables the caller never set through as empty
+# strings, so drop them and let the defaults apply.
+for v in MAILER_HOST MAILER_PORT MAILER_AUTH_TYPE MAILER_USERNAME MAILER_PASSWORD MAILER_FROM MAILER_TLS_INSECURE; do
+	[ -n "${!v:-}" ] || unset "$v"
+done
+
+# Uptrace has an explicit mailer.smtp.enabled switch, but requiring it on top of
+# MAILER_HOST would mostly be a way to configure a mailer that silently does
+# nothing. Naming a host is the intent, so derive the switch from it.
+if [ -n "${MAILER_HOST:-}" ]; then
+	export MAILER_ENABLED=true
+	echo "[onetrace] Mailer enabled: ${MAILER_HOST}:${MAILER_PORT:-587}"
+fi
+
 # ClickHouse's entrypoint only runs its init/bootstrap logic when called with no
 # arguments (any argument makes it exec that argument directly instead). See
 # https://github.com/ClickHouse/docker-library
