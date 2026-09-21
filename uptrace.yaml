@@ -47,7 +47,7 @@ seed_data:
     - key: org_user1
       org_key: org1
       user_key: user1
-      role: owner
+      role: viewer
   projects:
     - key: project1
       name: ${PROJECT_NAME}
@@ -60,7 +60,7 @@ seed_data:
     - key: project_user1
       project_key: project1
       org_user_key: org_user1
-      perm_level: admin
+      perm_level: view
 
 ch_cluster:
   cluster: uptrace1
